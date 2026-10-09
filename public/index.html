@@ -37,22 +37,24 @@ pre{white-space:pre-wrap;word-wrap:break-word;font:inherit;margin:0}h3{margin:0 
 <section id="news">
   <div class="card row">
     <input id="kw" placeholder="Keyword, e.g. GAMUDA">
-    <select id="ntype"><option value="">All</option><option>news</option><option>notice</option><option>research</option></select>
+    <select id="ntype"><option value="news">News</option><option value="notice">Notices</option><option value="research">Research</option></select>
     <button class="go" id="search">Search</button>
   </div>
   <div id="nout"></div>
 </section>
 <section id="portfolio">
   <div class="card">
-    <h3>Live portfolio via Moomoo OpenD</h3>
-    <p>OpenD is a desktop app that talks to Moomoo over a local TCP port, so the deployed site cannot read your account. Use the Claude Code skills locally instead:</p>
-    <ol>
-      <li>Install and log in to <b>Moomoo OpenD</b> (default <code>127.0.0.1:11111</code>).</li>
-      <li><code>pip install moomoo-api</code></li>
-      <li>Open this repo in Claude Code and ask: <i>"Show my portfolio positions"</i>.</li>
-    </ol>
-    <p class="mut">Rules: max 3 stocks · trailing stop the day you buy · no unplanned -10% holds · park idle cash in a money-market fund.</p>
+    <h3>Live data via local OpenD bridge</h3>
+    <p class="mut">Run OpenD, then <code>BRIDGE_TOKEN=… python3 bridge/opend_bridge.py</code> (read-only, localhost). Set <code>BRIDGE_ALLOW_ORIGIN</code> to this site's origin. Token stays in this tab only.</p>
+    <div class="row">
+      <input id="btok" type="password" placeholder="Bridge token" autocomplete="off">
+      <input id="bcode" placeholder="MY.5398" value="MY.5398" size="10">
+      <button class="go" id="bquote">Quote</button>
+      <button class="go" id="bport">Portfolio (SIMULATE)</button>
+    </div>
   </div>
+  <div id="pout"></div>
+  <div class="card mut">Rules: max 3 stocks · trailing stop the day you buy · no unplanned -10% holds · park idle cash in a money-market fund.</div>
 </section>
 </main>
 <script>
@@ -90,9 +92,20 @@ $('search').onclick=async()=>{
   $('nout').innerHTML='<div class="card mut">Searching…</div>';
   const r=await fetch(`/api/moomoo-news?keyword=${encodeURIComponent(kw)}&type=${encodeURIComponent($('ntype').value)}`);
   const d=await r.json();
-  $('nout').innerHTML=r.ok?`<div class="card"><pre>${esc(JSON.stringify(d,null,2))}</pre></div>`
-    :`<div class="card">${esc(d.error)}<br><span class="mut">${esc(d.hint||'')}</span></div>`;
+  if(!r.ok){$('nout').innerHTML=`<div class="card">${esc(d.error)}</div>`;return}
+  $('nout').innerHTML=d.items.length?d.items.map(i=>`<div class="card"><b>${i.url?`<a href="${esc(i.url)}" target="_blank" rel="noopener noreferrer">${esc(i.title)}</a>`:esc(i.title)}</b><div class="mut">${i.published?esc(new Date(i.published).toLocaleString()):''}</div></div>`).join('')+`<div class="mut">${esc(d.disclaimer)}</div>`
+    :'<div class="card mut">No results.</div>';
 };
+const bridge=async p=>{
+  $('pout').innerHTML='<div class="card mut">Loading…</div>';
+  try{
+    const r=await fetch('http://127.0.0.1:8787'+p,{headers:{Authorization:'Bearer '+$('btok').value}});
+    const d=await r.json();
+    $('pout').innerHTML=`<div class="card"><pre>${esc(JSON.stringify(d,null,2))}</pre></div>`;
+  }catch(e){$('pout').innerHTML='<div class="card">Bridge not reachable. Is it running locally? (Safari blocks https→localhost.)</div>'}
+};
+$('bquote').onclick=()=>bridge('/snapshot?code='+encodeURIComponent($('bcode').value));
+$('bport').onclick=()=>bridge('/portfolio?market=MY&trd_env=SIMULATE');
 </script>
 </body>
 </html>

@@ -1,25 +1,51 @@
-// Moomoo news proxy. OpenD speaks a local TCP protocol, so a Netlify function cannot reach it
-// directly. Point OPEND_BRIDGE_URL at an HTTP bridge you run next to OpenD (GET ?keyword=&type=).
+// Moomoo news/notice/research search via the public ai-news-search API (no OpenD needed).
+const BASE = 'https://ai-news-search.moomoo.com/news_search';
+const TYPES = { news: 1, notice: 2, research: 3 };
+
+const clean = (s) => String(s || '').replace(/<\/?em>/g, '');
+
+function normalize(item) {
+  const ts = Number(item.publish_time);
+  let url = '';
+  try {
+    const u = new URL(item.url);
+    if (u.protocol === 'https:' && /(^|\.)moomoo\.com$/.test(u.hostname)) url = u.href;
+  } catch { /* drop unsafe/invalid links */ }
+  return {
+    id: item.news_id,
+    type: item.news_type,
+    title: clean(item.title),
+    published: ts ? new Date((ts > 1e11 ? ts : ts * 1000)).toISOString() : null,
+    url,
+  };
+}
+
+exports.normalize = normalize;
 exports.handler = async (event) => {
   const json = (statusCode, body) => ({
     statusCode, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
   });
-  const bridge = process.env.OPEND_BRIDGE_URL;
-  if (!bridge) {
-    return json(503, {
-      error: 'OpenD bridge not configured',
-      hint: 'Run OpenD locally and use the Claude Code moomoo-news-search skill, or set OPEND_BRIDGE_URL.',
-    });
-  }
-  const { keyword = '', type = '' } = event.queryStringParameters || {};
-  if (!keyword) return json(400, { error: 'keyword required' });
+  const { keyword = '', type = 'news', size = '10' } = event.queryStringParameters || {};
+  if (!keyword.trim() || keyword.length > 60) return json(400, { error: 'keyword required (max 60 chars)' });
+  const newsType = TYPES[type] || 1;
+  const n = Math.min(Math.max(parseInt(size, 10) || 10, 1), 50);
+
+  const url = new URL(BASE);
+  url.search = new URLSearchParams({
+    keyword: keyword.trim(), size: String(n), news_type: String(newsType), lang: 'en', sort_type: '2',
+  });
   try {
-    const url = new URL(bridge);
-    url.searchParams.set('keyword', keyword);
-    if (type) url.searchParams.set('type', type);
-    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
-    return json(res.status, await res.json());
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'moomoo-news-search/0.0.2 (Skill)' },
+      signal: AbortSignal.timeout(10000),
+    });
+    const data = await res.json();
+    if (data.code !== 0) return json(502, { error: 'Upstream error', code: data.code });
+    return json(200, {
+      keyword, type, items: (data.data || []).map(normalize),
+      disclaimer: 'Compiled from public information; not investment advice.',
+    });
   } catch (e) {
-    return json(502, { error: `Bridge unreachable: ${e.message}` });
+    return json(502, { error: `News service unreachable: ${e.message}` });
   }
 };
