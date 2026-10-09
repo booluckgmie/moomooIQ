@@ -62,7 +62,36 @@
     return { rows, alerts, invested: r3(invested), pl: r3(pl), plPct: invested ? r3(pl / invested) : 0 };
   }
 
-  const api = { RULES, evaluate, portfolio };
+  // Export / import. Import validates and keeps known fields only (file may come from anywhere).
+  const TYPES = ['small', 'mid', 'large'];
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+  function exportState(state) {
+    return JSON.stringify({ app: 'moomooiq', version: 1, exportedAt: new Date().toISOString(),
+      cash: state.cash === '' || state.cash == null ? null : Number(state.cash), positions: state.positions }, null, 2);
+  }
+
+  function parseImport(text) {
+    let d;
+    try { d = JSON.parse(text); } catch { throw new Error('Not valid JSON'); }
+    if (!d || d.app !== 'moomooiq' || !Array.isArray(d.positions)) throw new Error('Not a MoomooIQ export');
+    if (d.version !== 1) throw new Error('Unsupported export version ' + d.version);
+    if (d.positions.length > 50) throw new Error('Too many positions (max 50)');
+    const positions = d.positions.map((p, i) => {
+      const ticker = typeof p.ticker === 'string' ? p.ticker.trim().toUpperCase() : '';
+      const qty = num(p.qty), cost = num(p.cost);
+      if (!/^[A-Z0-9 .&-]{1,20}$/.test(ticker)) throw new Error(`Position ${i + 1}: bad ticker`);
+      if (!(qty > 0) || !(cost > 0)) throw new Error(`Position ${i + 1} (${ticker}): qty and cost must be positive numbers`);
+      const price = num(p.price);
+      return { ticker, qty, cost, type: TYPES.includes(p.type) ? p.type : 'mid',
+        high: Math.max(cost, num(p.high) || 0, price || 0), price: price > 0 ? price : null,
+        trimmed: p.trimmed === true, plan: typeof p.plan === 'string' ? p.plan.slice(0, 500) : '' };
+    });
+    const cash = num(d.cash);
+    return { positions, cash: cash == null ? '' : String(cash) };
+  }
+
+  const api = { RULES, evaluate, portfolio, exportState, parseImport };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Tracker = api;
 })(typeof window !== 'undefined' ? window : globalThis);

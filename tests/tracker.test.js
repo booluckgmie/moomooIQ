@@ -56,3 +56,31 @@ test('INARI worked example: RM71 total on RM424', () => {
   const p = portfolio([{ ...base, qty: 100, price: 2.54 }], 500);
   assert.strictEqual(p.rows[0].pl, 42);
 });
+
+const { exportState, parseImport } = require('../public/tracker');
+
+test('export then import round-trips positions and cash', () => {
+  const state = { cash: '320', positions: [{ ticker: 'INARI', qty: 200, cost: 2.12, type: 'mid', high: 2.41, price: 2.41, trimmed: true, plan: 'trail' }] };
+  const back = parseImport(exportState(state));
+  assert.deepStrictEqual(back.positions[0], state.positions[0]);
+  assert.strictEqual(back.cash, '320');
+});
+
+test('import rejects junk, wrong app, bad numbers and oversize lists', () => {
+  const wrap = (positions, extra = {}) => JSON.stringify({ app: 'moomooiq', version: 1, positions, ...extra });
+  assert.throws(() => parseImport('nope'), /valid JSON/);
+  assert.throws(() => parseImport('{"app":"other","positions":[]}'), /MoomooIQ/);
+  assert.throws(() => parseImport(wrap([], { version: 2 })), /version/);
+  assert.throws(() => parseImport(wrap([{ ticker: 'X', qty: -1, cost: 1 }])), /positive/);
+  assert.throws(() => parseImport(wrap([{ ticker: '<script>', qty: 1, cost: 1 }])), /bad ticker/);
+  assert.throws(() => parseImport(wrap(Array(51).fill({ ticker: 'A', qty: 1, cost: 1 }))), /Too many/);
+});
+
+test('import drops unknown fields and coerces bad type/plan', () => {
+  const r = parseImport(JSON.stringify({ app: 'moomooiq', version: 1, positions: [
+    { ticker: 'gamuda', qty: 10, cost: 5, type: 'huge', evil: '<img onerror=x>', plan: 7 }] }));
+  assert.deepStrictEqual(Object.keys(r.positions[0]).sort(), ['cost', 'high', 'plan', 'price', 'qty', 'ticker', 'trimmed', 'type']);
+  assert.strictEqual(r.positions[0].type, 'mid');
+  assert.strictEqual(r.positions[0].ticker, 'GAMUDA');
+  assert.strictEqual(r.positions[0].plan, '');
+});

@@ -56,6 +56,9 @@ pre{white-space:pre-wrap;word-wrap:break-word;font:inherit;margin:0}h3{margin:0 
     <div class="row" style="margin-top:8px">
       <input id="cash" type="number" placeholder="Free cash RM" style="width:130px">
       <button class="go" id="pfetch">Fetch prices (bridge)</button>
+      <button class="go" id="pexp">Export</button>
+      <button class="go" id="pimp">Import</button>
+      <input id="pfile" type="file" accept="application/json,.json" hidden>
       <input id="btok" type="password" placeholder="Bridge token" autocomplete="off" size="14">
     </div>
     <p class="mut">Bridge: <code>BRIDGE_TOKEN=… python3 bridge/opend_bridge.py</code> (OpenD running, localhost, read-only). Or type prices in manually.</p>
@@ -159,6 +162,22 @@ $('pfetch').onclick=async()=>{
     }
     save();renderTracker();
   }catch(e){alert('Bridge not reachable. Is it running locally? (Safari blocks https→localhost.)')}
+};
+$('pexp').onclick=()=>{
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([Tracker.exportState(state)],{type:'application/json'}));
+  a.download='moomooiq-positions-'+new Date().toISOString().slice(0,10)+'.json';
+  a.click();URL.revokeObjectURL(a.href);
+};
+$('pimp').onclick=()=>$('pfile').click();
+$('pfile').onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{
+    if(f.size>200000)throw new Error('File too large');
+    const d=Tracker.parseImport(await f.text());
+    if(state.positions.length&&!confirm(`Replace your ${state.positions.length} current position(s) with ${d.positions.length} from the file?`))return;
+    state.positions=d.positions;state.cash=d.cash;$('cash').value=d.cash;save();renderTracker();
+  }catch(err){alert('Import failed: '+err.message)}
 };
 renderTracker();
 </script>
