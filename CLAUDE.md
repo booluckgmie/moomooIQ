@@ -13,6 +13,12 @@ Bursa Malaysia stock analysis SPA (Gemini) plus Claude Code skills for Moomoo Op
 - `npm test` – JS + bridge unit tests; `npm run dev` – `netlify dev`; `npm run deploy`
 - Env: see `.env.example` (`GEMINI_API_KEY` required for analysis)
 
+## Deploy (Vercel)
+- `vercel.json` serves `public/`; `api/*.js` wrap the same handlers in `netlify/functions/` via `api/_adapt.js` (Netlify still works).
+- Env vars (Production + Preview): `GEMINI_API_KEY`, optional `GEMINI_MODEL`, `ACCESS_TOKEN`. Don't set OPEND/BRIDGE vars; the bridge is local-only.
+- `/api/analyze` spends your Gemini quota: set `ACCESS_TOKEN` (UI has a field) and/or Vercel Deployment Protection.
+- `.vercelignore` keeps skills, bridge, docs and tests out of the deploy.
+
 ## Notes
 - News needs no OpenD. Quotes/portfolio need OpenD running locally + the bridge (`BRIDGE_TOKEN=… python3 bridge/opend_bridge.py`). Bridge defaults to SIMULATE; REAL needs `BRIDGE_ALLOW_REAL=1`. Never expose it publicly.
 - Run `/install-moomoo-opend` on your own machine (needs GUI login); not in cloud sessions.

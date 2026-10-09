@@ -1,4 +1,5 @@
 // 3-framework Bursa Malaysia stock analysis via Gemini. POST { ticker, name }.
+const crypto = require('node:crypto');
 const GEMINI = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 const FRAMEWORKS = {
@@ -32,6 +33,11 @@ exports.handler = async (event) => {
     statusCode, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
   });
   if (event.httpMethod !== 'POST') return json(405, { error: 'POST only' });
+  if (process.env.ACCESS_TOKEN) {
+    const got = Buffer.from(String((event.headers || {})['x-access-token'] || ''));
+    const want = Buffer.from(process.env.ACCESS_TOKEN);
+    if (got.length !== want.length || !crypto.timingSafeEqual(got, want)) return json(401, { error: 'Access token required' });
+  }
   if (!process.env.GEMINI_API_KEY) return json(500, { error: 'GEMINI_API_KEY not set' });
 
   let input;

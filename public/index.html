@@ -30,6 +30,7 @@ pre{white-space:pre-wrap;word-wrap:break-word;font:inherit;margin:0}h3{margin:0 
   <div class="card row">
     <select id="sector"></select>
     <select id="ticker"></select>
+    <input id="atok" type="password" placeholder="Access token (if set)" autocomplete="off" size="16">
     <button class="go" id="run">Run 3-framework analysis</button>
   </div>
   <div id="out"></div>
@@ -98,7 +99,7 @@ $('run').onclick=async()=>{
   const o=$('ticker').selectedOptions[0];if(!o)return;
   $('run').disabled=true;$('out').innerHTML='<div class="card mut">Analysing…</div>';
   try{
-    const r=await fetch('/api/analyze',{method:'POST',body:JSON.stringify({ticker:o.value,name:o.dataset.name})});
+    const r=await fetch('/api/analyze',{method:'POST',headers:{'x-access-token':$('atok').value},body:JSON.stringify({ticker:o.value,name:o.dataset.name})});
     const d=await r.json();if(!r.ok)throw new Error(d.error);
     const T={catalyst:'1 · Catalyst Breakdown',valuation:'2 · Financial Health & Valuation',scenarios:'3 · Sentiment, Scenarios & Trade Plan'};
     $('out').innerHTML=Object.keys(T).map(k=>`<div class="card"><h3>${T[k]}</h3><pre>${esc(d[k])}</pre></div>`).join('')

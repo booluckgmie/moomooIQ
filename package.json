@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "netlify dev",
     "deploy": "netlify deploy --prod",
+    "deploy:vercel": "vercel --prod",
     "test": "node --test \"netlify/functions/*.test.js\" \"tests/*.test.js\" && python3 -m unittest discover -s bridge"
   },
   "engines": { "node": ">=18" },
