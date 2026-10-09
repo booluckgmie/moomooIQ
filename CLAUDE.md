@@ -5,6 +5,7 @@ Bursa Malaysia stock analysis SPA (Gemini) plus Claude Code skills for Moomoo Op
 ## Layout
 - `public/index.html` – SPA, 3 tabs (Analyse, News, Portfolio)
 - `netlify/functions/` – `analyze.js` (Gemini, 3 frameworks), `stocks.js` (universe), `moomoo-news.js` (public Moomoo news API)
+- `public/tracker.js` – pure portfolio rules engine (stops, ladder, trim, alerts); tests in `tests/`. Positions live in the browser's localStorage only.
 - `bridge/opend_bridge.py` – local read-only HTTP bridge to OpenD (token-auth, allowlisted vendor scripts, no trading endpoints)
 - `.claude/skills/` – official Moomoo skills v2.1 (news-search, stock-digest, comment-sentiment, capital/derivatives/technical-anomaly), plus `moomooapi` and `install-moomoo-opend` (vendor files; re-download from https://www.moomoo.com/skills/moomoo-install.md to update)
 
