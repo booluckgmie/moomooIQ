@@ -84,3 +84,46 @@ test('import drops unknown fields and coerces bad type/plan', () => {
   assert.strictEqual(r.positions[0].ticker, 'GAMUDA');
   assert.strictEqual(r.positions[0].plan, '');
 });
+
+const { sizeTrade, equityOf } = require('../public/tracker');
+
+test('sizing: 2% risk on RM2,700 at RM2.12 -> 300 shares, loss capped near RM54', () => {
+  const r = sizeTrade({ equity: 2700, cash: 2700, entry: 2.12, openCount: 0, riskPct: 0.02 });
+  assert.strictEqual(r.qty, 300);
+  assert.strictEqual(r.stop, 1.95);
+  assert.ok(r.maxLoss <= 2700 * 0.02 + 1e-9);
+  assert.strictEqual(r.boundBy, 'risk limit');
+});
+
+test('sizing: allocation cap binds on a tight stop budget', () => {
+  const r = sizeTrade({ equity: 3000, cash: 3000, entry: 1.0, riskPct: 0.1 });
+  assert.match(r.boundBy, /allocation/);
+  assert.ok(r.cost <= 1000);
+});
+
+test('sizing: cash buffer is kept and can block the trade', () => {
+  const r = sizeTrade({ equity: 5000, cash: 300, entry: 2.0, riskPct: 0.02 });
+  assert.strictEqual(r.qty, 0);            // only RM100 usable -> under one lot
+  assert.match(r.reason, /cash/);
+});
+
+test('sizing: refuses a 4th position and bad inputs', () => {
+  assert.match(sizeTrade({ equity: 5000, cash: 5000, entry: 2, openCount: 3 }).reason, /max 3/);
+  assert.match(sizeTrade({ equity: 5000, cash: 5000, entry: 0 }).reason, /entry/i);
+  assert.match(sizeTrade({ equity: 0, cash: 0, entry: 2 }).reason, /cash/i);
+  assert.match(sizeTrade({ equity: 5000, cash: 5000, entry: 2, riskPct: 0.5 }).reason, /between/);
+});
+
+test('sizing: qty is always a whole lot and loss never exceeds the risk budget', () => {
+  for (const entry of [0.35, 0.8, 1.55, 2.12, 4.1, 6.28, 9.9]) {
+    const r = sizeTrade({ equity: 2700, cash: 2700, entry, riskPct: 0.02 });
+    if (r.qty) {
+      assert.strictEqual(r.qty % 100, 0);
+      assert.ok(r.maxLoss <= 2700 * 0.02 + 1e-6, `entry ${entry}`);
+    }
+  }
+});
+
+test('equityOf uses live price when set, else cost, plus cash', () => {
+  assert.strictEqual(equityOf([{ qty: 100, cost: 2, price: 3 }, { qty: 100, cost: 1 }], 50), 450);
+});

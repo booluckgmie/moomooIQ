@@ -62,6 +62,36 @@
     return { rows, alerts, invested: r3(invested), pl: r3(pl), plPct: invested ? r3(pl / invested) : 0 };
   }
 
+  // Position sizing: shares such that hitting the initial stop loses at most riskPct of equity.
+  // Capped by an equal-slot allocation (equity / maxPositions) and by cash above the buffer.
+  function equityOf(positions, cash) {
+    const held = positions.reduce((t, p) => t + (Number(p.price) > 0 ? Number(p.price) : Number(p.cost)) * Number(p.qty), 0);
+    return r3(held + (Number(cash) || 0));
+  }
+
+  function sizeTrade({ equity, cash, entry, openCount = 0, riskPct = 0.02, lot = 100 }, rules = RULES) {
+    entry = Number(entry); equity = Number(equity); cash = Number(cash) || 0;
+    if (!(entry > 0)) return { qty: 0, reason: 'Enter a valid entry price' };
+    if (!(equity > 0)) return { qty: 0, reason: 'Enter your free cash (equity is zero)' };
+    if (!(riskPct > 0 && riskPct <= 0.1)) return { qty: 0, reason: 'Risk per trade must be between 0% and 10%' };
+    const stop = entry * (1 - rules.initialStop);
+    const perShare = entry - stop;
+    const limits = [
+      ['risk limit', (equity * riskPct) / perShare],
+      [`1/${rules.maxPositions} allocation cap`, equity / rules.maxPositions / entry],
+      [`cash (keeping RM${rules.cashBuffer} buffer)`, Math.max(0, cash - rules.cashBuffer) / entry],
+    ];
+    const [bound, raw] = limits.reduce((a, b) => (b[1] < a[1] ? b : a));
+    const qty = Math.floor(raw / lot) * lot;
+    const base = { stop: r3(stop), target: r3(entry * (1 + rules.target)), lot };
+    if (openCount >= rules.maxPositions)
+      return { ...base, qty: 0, reason: `Already holding ${openCount} positions (max ${rules.maxPositions}); close one first` };
+    if (qty < lot)
+      return { ...base, qty: 0, reason: `Not enough room for one ${lot}-share lot (limited by ${bound})` };
+    return { ...base, qty, cost: r3(qty * entry), maxLoss: r3(qty * perShare),
+      maxLossPct: r3((qty * perShare) / equity), pctOfEquity: r3((qty * entry) / equity), boundBy: bound };
+  }
+
   // Export / import. Import validates and keeps known fields only (file may come from anywhere).
   const TYPES = ['small', 'mid', 'large'];
   const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -91,7 +121,7 @@
     return { positions, cash: cash == null ? '' : String(cash) };
   }
 
-  const api = { RULES, evaluate, portfolio, exportState, parseImport };
+  const api = { RULES, evaluate, portfolio, equityOf, sizeTrade, exportState, parseImport };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Tracker = api;
 })(typeof window !== 'undefined' ? window : globalThis);

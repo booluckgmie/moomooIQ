@@ -63,6 +63,15 @@ pre{white-space:pre-wrap;word-wrap:break-word;font:inherit;margin:0}h3{margin:0 
     </div>
     <p class="mut">Bridge: <code>BRIDGE_TOKEN=… python3 bridge/opend_bridge.py</code> (OpenD running, localhost, read-only). Or type prices in manually.</p>
   </div>
+  <div class="card">
+    <h3>Position sizing (8% stop)</h3>
+    <div class="row">
+      <input id="se" type="number" step="0.001" placeholder="Entry price RM" style="width:130px">
+      <input id="sr" type="number" step="0.1" min="0.1" max="10" style="width:90px" title="Max loss if the stop hits, % of equity">
+      <span class="mut" style="align-self:center">% risk of equity</span>
+    </div>
+    <div id="sout" style="margin-top:8px"></div>
+  </div>
   <div id="pout"></div>
 </section>
 </main>
@@ -131,6 +140,7 @@ function renderTracker(){
      <tr class="mut" style="text-align:left"><th>Position</th><th>Price</th><th>P/L</th><th>Stop</th><th>Target</th><th>Action</th><th>Notes</th></tr>${rows}</table>
      <p>Invested ${rm(p.invested)} · P/L ${rm(p.pl)} (${pct(p.plPct)})</p></div>`:'<div class="card mut">No positions. Add one above - set the stop the same day you buy.</div>')
    +'<div class="mut">Educational only; not financial advice. Remember to place the actual trailing stop order in your broker.</div>';
+  renderSizing();
 }
 $('cash').value=state.cash;
 $('cash').oninput=e=>{state.cash=e.target.value;save();renderTracker()};
@@ -179,6 +189,19 @@ $('pfile').onchange=async e=>{
     state.positions=d.positions;state.cash=d.cash;$('cash').value=d.cash;save();renderTracker();
   }catch(err){alert('Import failed: '+err.message)}
 };
+function renderSizing(){
+  const eq=Tracker.equityOf(state.positions,state.cash);
+  const risk=(+$('sr').value||0)/100;
+  const r=Tracker.sizeTrade({equity:eq,cash:state.cash,entry:$('se').value,openCount:state.positions.length,riskPct:risk});
+  const head=`<span class="mut">Equity ${rm(eq)} (cash + holdings) · 100-share lots</span><br>`;
+  $('sout').innerHTML=head+(r.qty?`<b>Buy ${r.qty} shares</b> = ${rm(r.cost)} (${pct(r.pctOfEquity)} of equity)<br>
+    Stop ${rm(r.stop)} · max loss ${rm(r.maxLoss)} (${pct(r.maxLossPct)}) · target ${rm(r.target)}<br>
+    <span class="mut">Limited by: ${esc(r.boundBy)}. Place the stop order the same day.</span>`
+    :`<span style="color:#d6336c">${esc(r.reason)}</span>`);
+}
+try{$('sr').value=localStorage.getItem('moomooiq.risk')||'2'}catch(e){$('sr').value='2'}
+$('sr').oninput=()=>{try{localStorage.setItem('moomooiq.risk',$('sr').value)}catch(e){}renderSizing()};
+$('se').oninput=renderSizing;
 renderTracker();
 </script>
 </body>
