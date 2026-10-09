@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MoomooIQ</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--fg:#1a1d23;--mut:#6b7280;--acc:#e8590c;--bd:#e5e7eb}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#181b21;--fg:#e8eaed;--mut:#9aa0a6;--bd:#2a2e36}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif}
+header{padding:16px;border-bottom:1px solid var(--bd)}h1{margin:0;font-size:20px}h1 span{color:var(--acc)}
+nav{display:flex;gap:4px;padding:8px 16px}nav button{border:0;background:none;color:var(--mut);padding:8px 12px;border-radius:8px;cursor:pointer;font:inherit}
+nav button.on{background:var(--card);color:var(--fg);box-shadow:0 0 0 1px var(--bd)}
+main{padding:16px;max-width:900px;margin:auto}section{display:none}section.on{display:block}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:12px}
+.row{display:flex;gap:8px;flex-wrap:wrap}select,input,button.go{padding:8px 10px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--fg);font:inherit}
+button.go{background:var(--acc);color:#fff;border:0;cursor:pointer}button.go:disabled{opacity:.5}
+pre{white-space:pre-wrap;word-wrap:break-word;font:inherit;margin:0}h3{margin:0 0 8px}.mut{color:var(--mut)}
+</style>
+</head>
+<body>
+<header><h1>Moomoo<span>IQ</span></h1><div class="mut">Bursa Malaysia analysis · educational only, not financial advice</div></header>
+<nav>
+  <button class="on" data-tab="analyse">📊 Analyse</button>
+  <button data-tab="news">📰 News</button>
+  <button data-tab="portfolio">💼 Portfolio</button>
+</nav>
+<main>
+<section id="analyse" class="on">
+  <div class="card row">
+    <select id="sector"></select>
+    <select id="ticker"></select>
+    <button class="go" id="run">Run 3-framework analysis</button>
+  </div>
+  <div id="out"></div>
+</section>
+<section id="news">
+  <div class="card row">
+    <input id="kw" placeholder="Keyword, e.g. GAMUDA">
+    <select id="ntype"><option value="">All</option><option>news</option><option>notice</option><option>research</option></select>
+    <button class="go" id="search">Search</button>
+  </div>
+  <div id="nout"></div>
+</section>
+<section id="portfolio">
+  <div class="card">
+    <h3>Live portfolio via Moomoo OpenD</h3>
+    <p>OpenD is a desktop app that talks to Moomoo over a local TCP port, so the deployed site cannot read your account. Use the Claude Code skills locally instead:</p>
+    <ol>
+      <li>Install and log in to <b>Moomoo OpenD</b> (default <code>127.0.0.1:11111</code>).</li>
+      <li><code>pip install moomoo-api</code></li>
+      <li>Open this repo in Claude Code and ask: <i>"Show my portfolio positions"</i>.</li>
+    </ol>
+    <p class="mut">Rules: max 3 stocks · trailing stop the day you buy · no unplanned -10% holds · park idle cash in a money-market fund.</p>
+  </div>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let stocks=[];
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav button,main section').forEach(e=>e.classList.remove('on'));
+  b.classList.add('on');$(b.dataset.tab).classList.add('on');
+});
+function fillTickers(){
+  const sec=$('sector').value;
+  $('ticker').innerHTML=stocks.filter(s=>!sec||s.sector===sec)
+    .map(s=>`<option value="${esc(s.ticker)}" data-name="${esc(s.name)}">${esc(s.ticker)} · ${esc(s.name)} (${esc(s.code)})</option>`).join('');
+}
+fetch('/api/stocks').then(r=>r.json()).then(d=>{
+  stocks=d.stocks;
+  $('sector').innerHTML='<option value="">All sectors</option>'+d.sectors.map(s=>`<option>${esc(s)}</option>`).join('');
+  $('sector').onchange=fillTickers;fillTickers();
+}).catch(()=>$('out').textContent='Could not load stock list.');
+$('run').onclick=async()=>{
+  const o=$('ticker').selectedOptions[0];if(!o)return;
+  $('run').disabled=true;$('out').innerHTML='<div class="card mut">Analysing…</div>';
+  try{
+    const r=await fetch('/api/analyze',{method:'POST',body:JSON.stringify({ticker:o.value,name:o.dataset.name})});
+    const d=await r.json();if(!r.ok)throw new Error(d.error);
+    const T={catalyst:'1 · Catalyst Breakdown',valuation:'2 · Financial Health & Valuation',scenarios:'3 · Sentiment, Scenarios & Trade Plan'};
+    $('out').innerHTML=Object.keys(T).map(k=>`<div class="card"><h3>${T[k]}</h3><pre>${esc(d[k])}</pre></div>`).join('')
+      +`<div class="mut">${esc(d.disclaimer)}</div>`;
+  }catch(e){$('out').innerHTML=`<div class="card">Error: ${esc(e.message)}</div>`}
+  $('run').disabled=false;
+};
+$('search').onclick=async()=>{
+  const kw=$('kw').value.trim();if(!kw)return;
+  $('nout').innerHTML='<div class="card mut">Searching…</div>';
+  const r=await fetch(`/api/moomoo-news?keyword=${encodeURIComponent(kw)}&type=${encodeURIComponent($('ntype').value)}`);
+  const d=await r.json();
+  $('nout').innerHTML=r.ok?`<div class="card"><pre>${esc(JSON.stringify(d,null,2))}</pre></div>`
+    :`<div class="card">${esc(d.error)}<br><span class="mut">${esc(d.hint||'')}</span></div>`;
+};
+</script>
+</body>
+</html>

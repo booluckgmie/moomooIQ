@@ -1,0 +1,13 @@
+{
+  "name": "moomooiq",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bursa Malaysia stock analysis (Gemini) + Moomoo OpenAPI skills",
+  "scripts": {
+    "dev": "netlify dev",
+    "deploy": "netlify deploy --prod",
+    "test": "node --test \"netlify/functions/*.test.js\""
+  },
+  "engines": { "node": ">=18" },
+  "devDependencies": { "netlify-cli": "^17.0.0" }
+}
