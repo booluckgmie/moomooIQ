@@ -3,10 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,">
 <title>MoomooIQ</title>
 <style>
-:root{--bg:#f6f7f9;--card:#fff;--fg:#1a1d23;--mut:#6b7280;--acc:#e8590c;--bd:#e5e7eb}
-@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#181b21;--fg:#e8eaed;--mut:#9aa0a6;--bd:#2a2e36}}
+:root{--bg:#f6f7f9;--card:#fff;--fg:#1a1d23;--mut:#6b7280;--acc:#e8590c;--bd:#e5e7eb;
+--red:#c92a2a;--grn:#2b8a3e;--amb:#b45309;--red-bg:#fff0f0;--grn-bg:#eef9f0;--amb-bg:#fff6e5}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#181b21;--fg:#e8eaed;--mut:#9aa0a6;--bd:#2a2e36;
+--red:#ff8787;--grn:#69db7c;--amb:#ffc078;--red-bg:#2a1719;--grn-bg:#14261a;--amb-bg:#2a2214}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif}
 header{padding:16px;border-bottom:1px solid var(--bd)}h1{margin:0;font-size:20px}h1 span{color:var(--acc)}
 nav{display:flex;gap:4px;padding:8px 16px}nav button{border:0;background:none;color:var(--mut);padding:8px 12px;border-radius:8px;cursor:pointer;font:inherit}
@@ -16,17 +19,62 @@ main{padding:16px;max-width:900px;margin:auto}section{display:none}section.on{di
 .row{display:flex;gap:8px;flex-wrap:wrap}select,input,button.go{padding:8px 10px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--fg);font:inherit}
 button.go{background:var(--acc);color:#fff;border:0;cursor:pointer}button.go:disabled{opacity:.5}
 pre{white-space:pre-wrap;word-wrap:break-word;font:inherit;margin:0}h3{margin:0 0 8px}.mut{color:var(--mut)}
+a{color:inherit}
+/* Today */
+#today{max-width:680px;margin:0 auto}
+.hero{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:4px}
+.date{font-size:22px;font-weight:700;line-height:1.2}
+.pill{display:inline-block;margin-top:6px;padding:4px 10px;border-radius:999px;font-size:13px;font-weight:600;background:var(--bd);color:var(--fg)}
+.pill.open{background:var(--grn-bg);color:var(--grn)}.pill.pre,.pill.break{background:var(--amb-bg);color:var(--amb)}
+.small{font-size:13px}.icon{width:40px;height:40px;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--fg);font-size:18px;cursor:pointer}
+.tier{margin:18px 0 8px;display:flex;align-items:baseline;gap:8px}.tier h2{margin:0;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)}
+.tier .n{font-size:12px;font-weight:700;padding:1px 8px;border-radius:999px;background:var(--red-bg);color:var(--red)}
+.box{background:var(--card);border:1px solid var(--bd);border-radius:12px;overflow:hidden}
+.box.alert{border-color:var(--red)}.box.calm{background:var(--grn-bg);border-color:transparent;color:var(--grn);padding:14px 16px;font-weight:600}
+.item{display:flex;gap:10px;width:100%;text-align:left;padding:12px 14px;min-height:48px;border:0;border-top:1px solid var(--bd);background:none;color:inherit;font:inherit;text-decoration:none;cursor:pointer}
+.item:first-child{border-top:0}.item:hover,.opp:hover{background:var(--bg)}
+.dot{flex:none;width:10px;height:10px;border-radius:50%;margin-top:6px;background:var(--mut)}
+.dot.bad{background:var(--red)}.dot.good{background:var(--grn)}.dot.info{background:var(--amb)}
+.rt{display:flex;flex-direction:column;min-width:0}.rt b{font-weight:600;overflow-wrap:anywhere}
+.sub{font-size:13px;color:var(--mut);overflow-wrap:anywhere}
+.new{font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;background:var(--acc);color:#fff;vertical-align:middle}
+.opp{display:flex;gap:12px;align-items:center;padding:12px 14px;border-top:1px solid var(--bd)}.opp:first-child{border-top:0}
+.rk{flex:none;width:26px;height:26px;border-radius:50%;background:var(--grn-bg);color:var(--grn);font-weight:700;display:grid;place-items:center}
+.ob{flex:1;min-width:0}.oh{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.tk{font-size:17px}.nm{color:var(--mut);font-size:13px}
+.sig{margin-left:auto;color:var(--grn);letter-spacing:2px;font-size:12px}.hl{display:block;margin:2px 0;text-decoration:none;overflow-wrap:anywhere}a.hl:hover{text-decoration:underline}
+button.sm{padding:8px 12px;min-height:40px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}.chip{padding:8px 12px;min-height:40px;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--fg);font:inherit;font-size:14px;cursor:pointer}
+.chip.sell{border-color:var(--red);background:var(--red-bg)}.chip.trim{border-color:var(--grn);background:var(--grn-bg)}.chip.noprice{border-style:dashed}
+.chip span{color:var(--mut)}.note{font-size:13px;color:var(--mut);margin:8px 2px}.banner{padding:10px 14px;border-radius:10px;background:var(--amb-bg);color:var(--amb);font-size:14px;margin-top:12px}
+details.card summary{cursor:pointer;font-weight:600}.wl{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.wl button{padding:6px 10px;min-height:36px;border-radius:999px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);font:inherit;cursor:pointer}
+@media(max-width:480px){.date{font-size:19px}main{padding:12px}}
 </style>
 </head>
 <body>
-<header><h1>Moomoo<span>IQ</span></h1><div class="mut">Bursa Malaysia analysis · educational only, not financial advice</div></header>
+<header><h1>Moomoo<span>IQ</span></h1></header>
 <nav>
-  <button class="on" data-tab="analyse">📊 Analyse</button>
+  <button class="on" data-tab="today">☀ Today</button>
+  <button data-tab="analyse">📊 Analyse</button>
   <button data-tab="news">📰 News</button>
   <button data-tab="portfolio">💼 Portfolio</button>
 </nav>
 <main>
-<section id="analyse" class="on">
+<section id="today" class="on">
+  <div class="hero">
+    <div><div class="date" id="tdate">&nbsp;</div><span class="pill" id="tmkt"></span></div>
+    <button class="icon" id="trefresh" aria-label="Refresh news" title="Refresh">↻</button>
+  </div>
+  <div class="small mut" id="tnext"></div>
+  <div id="tbody" aria-live="polite"></div>
+  <details class="card" id="twatch" style="margin-top:18px">
+    <summary>Edit watchlist</summary>
+    <div class="wl" id="wlchips"></div>
+    <div class="row"><select id="wladd" aria-label="Add stock to watchlist"></select><button class="go" id="wlbtn">Add</button></div>
+    <p class="small mut">Up to 8 names. Your open positions are always included.</p>
+  </details>
+</section>
+<section id="analyse">
   <div class="card row">
     <select id="sector"></select>
     <select id="ticker"></select>
@@ -77,14 +125,16 @@ pre{white-space:pre-wrap;word-wrap:break-word;font:inherit;margin:0}h3{margin:0 
 </section>
 </main>
 <script src="/tracker.js"></script>
+<script src="/today.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let stocks=[];
-document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+function show(tab){
   document.querySelectorAll('nav button,main section').forEach(e=>e.classList.remove('on'));
-  b.classList.add('on');$(b.dataset.tab).classList.add('on');
-});
+  document.querySelector(`nav button[data-tab="${tab}"]`).classList.add('on');$(tab).classList.add('on');window.scrollTo(0,0);
+}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>show(b.dataset.tab));
 function fillTickers(){
   const sec=$('sector').value;
   $('ticker').innerHTML=stocks.filter(s=>!sec||s.sector===sec)
@@ -93,7 +143,7 @@ function fillTickers(){
 fetch('/api/stocks').then(r=>r.json()).then(d=>{
   stocks=d.stocks;
   $('sector').innerHTML='<option value="">All sectors</option>'+d.sectors.map(s=>`<option>${esc(s)}</option>`).join('');
-  $('sector').onchange=fillTickers;fillTickers();
+  $('sector').onchange=fillTickers;fillTickers();renderWatch();renderToday();
 }).catch(()=>$('out').textContent='Could not load stock list.');
 $('run').onclick=async()=>{
   const o=$('ticker').selectedOptions[0];if(!o)return;
@@ -142,6 +192,7 @@ function renderTracker(){
      <p>Invested ${rm(p.invested)} · P/L ${rm(p.pl)} (${pct(p.plPct)})</p></div>`:'<div class="card mut">No positions. Add one above - set the stop the same day you buy.</div>')
    +'<div class="mut">Educational only; not financial advice. Remember to place the actual trailing stop order in your broker.</div>';
   renderSizing();
+  renderToday();
 }
 $('cash').value=state.cash;
 $('cash').oninput=e=>{state.cash=e.target.value;save();renderTracker()};
@@ -154,7 +205,7 @@ $('padd').onclick=()=>{
 $('pout').addEventListener('change',e=>{
   const i=e.target.dataset.i,f=e.target.dataset.f;if(i==null)return;
   const pos=state.positions[i];
-  if(f==='price'){pos.price=e.target.value===''?null:+e.target.value;if(pos.price)pos.high=Math.max(pos.high||0,pos.price)}
+  if(f==='price'){pos.price=e.target.value===''?null:+e.target.value;if(pos.price){pos.high=Math.max(pos.high||0,pos.price);pos.priceAt=new Date().toISOString()}}
   else if(f==='trimmed')pos.trimmed=e.target.checked;else pos[f]=e.target.value;
   save();renderTracker();
 });
@@ -169,7 +220,7 @@ $('pfetch').onclick=async()=>{
       const st=stocks.find(s=>s.ticker===pos.ticker);if(!st)continue;
       const r=await fetch('http://127.0.0.1:8787/snapshot?code=MY.'+st.code,{headers:{Authorization:'Bearer '+$('btok').value}});
       const d=await r.json();const px=d.data?.[0]?.last_price;
-      if(px>0){pos.price=px;pos.high=Math.max(pos.high||0,px)}
+      if(px>0){pos.price=px;pos.high=Math.max(pos.high||0,px);pos.priceAt=new Date().toISOString()}
     }
     save();renderTracker();
   }catch(e){alert('Bridge not reachable. Is it running locally? (Safari blocks https→localhost.)')}
@@ -203,6 +254,91 @@ function renderSizing(){
 try{$('sr').value=localStorage.getItem('moomooiq.risk')||'2'}catch(e){$('sr').value='2'}
 $('sr').oninput=()=>{try{localStorage.setItem('moomooiq.risk',$('sr').value)}catch(e){}renderSizing()};
 $('se').oninput=renderSizing;
+/* ---------- Today ---------- */
+const loadJSON=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v??d}catch(e){return d}};
+const saveJSON=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+const DEFAULT_WATCH=['GAMUDA','INARI','99SMART','SIME','NATGATE','YTLPOWR','MAYBANK','PCHEM'];
+let watch=(loadJSON('moomooiq.watch',DEFAULT_WATCH)||[]).filter(t=>/^[A-Z0-9.&-]{1,20}$/.test(t)).slice(0,8);
+const visit=Today.rollVisit(loadJSON('moomooiq.visit',null),Date.now());saveJSON('moomooiq.visit',visit);
+let brief=null,briefState='idle',briefAt=0;
+const nameOf=t=>(stocks.find(s=>s.ticker===t)||{}).name||'';
+const clock=d=>new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kuala_Lumpur'}).format(d);
+
+async function loadBrief(){
+  const tickers=[...new Set([...state.positions.map(p=>p.ticker),...watch])].slice(0,12);
+  if(!tickers.length){brief=null;briefState='ok';renderToday();return}
+  briefState='loading';renderToday();
+  try{
+    const r=await fetch('/api/brief?tickers='+encodeURIComponent(tickers.join(',')));
+    if(!r.ok)throw new Error('brief '+r.status);
+    brief=await r.json();briefState='ok';briefAt=Date.now();
+  }catch(e){brief=null;briefState='error'}
+  renderToday();
+}
+
+function itemRow(it){
+  const inner=`<span class="dot ${it.tone}"></span><span class="rt"><b>${esc(it.title)}${it.isNew?' <span class="new">NEW</span>':''}</b><span class="sub">${esc(it.sub||'')}</span></span>`;
+  return it.url?`<a class="item" href="${esc(it.url)}" target="_blank" rel="noopener noreferrer">${inner}</a>`
+    :`<button class="item" data-go="${esc(it.go||'portfolio')}">${inner}</button>`;
+}
+function tier(label,n){return `<div class="tier"><h2>${label}</h2>${n?`<span class="n">${n}</span>`:''}</div>`}
+
+function renderToday(){
+  const now=new Date(),ms=Today.marketStatus(now),nc=Today.nextCheck(now);
+  $('tdate').textContent=new Intl.DateTimeFormat('en-GB',{weekday:'long',day:'numeric',month:'long',timeZone:'Asia/Kuala_Lumpur'}).format(now);
+  $('tmkt').className='pill '+ms.state;$('tmkt').textContent=`${ms.label} · ${ms.detail}`;
+  $('tnext').textContent=`Next look: ${nc.at}${nc.when==='today'?'':' '+nc.when} · ${nc.why}`;
+
+  const p=Tracker.portfolio(state.positions,state.cash);
+  const t=Today.buildToday({now,brief,positions:state.positions,portfolio:p,watch,sinceVisit:visit.since});
+  let h='';
+  if(briefState==='error')h+=`<div class="banner">News unavailable right now. Showing your own rules only. <button class="go sm" id="tretry" style="margin-left:6px">Retry</button></div>`;
+
+  h+=tier('Needs action',t.attention.length)+(t.attention.length
+    ?`<div class="box alert">${t.attention.map(itemRow).join('')}</div>`
+    :'<div class="box calm">✓ Nothing needs action today.</div>');
+
+  h+=tier('Best opportunities');
+  if(briefState==='loading'&&!brief)h+='<div class="box"><div class="item"><span class="sub">Reading the latest headlines…</span></div></div>';
+  else if(t.opportunities.length){
+    h+='<div class="box">'+t.opportunities.map((o,i)=>`<div class="opp"><div class="rk">${i+1}</div><div class="ob">
+      <div class="oh"><b class="tk">${esc(o.ticker)}</b><span class="nm">${esc(nameOf(o.ticker))}</span><span class="sig" title="Headline momentum">${'●'.repeat(o.dots)}${'○'.repeat(3-o.dots)}</span></div>
+      ${o.url?`<a class="hl" href="${esc(o.url)}" target="_blank" rel="noopener noreferrer">${esc(o.title)}</a>`:`<span class="hl">${esc(o.title)}</span>`}
+      <div class="sub">${esc(o.sub)}${o.isNew?' · <span class="new">NEW</span>':''}</div></div>
+      <button class="go sm" data-an="${esc(o.ticker)}">Analyse</button></div>`).join('')+'</div>';
+    h+=`<p class="note">${t.slotsFull?'All 3 slots are used, so these are for watching only. ':''}Ranked by recent headlines only, not price or valuation. Run Analyse and check your rules before buying.</p>`;
+  }else h+=`<div class="box"><div class="item"><span class="rt"><b>No standout setup today</b><span class="sub">Quiet is fine. One good stock beats five average ones.</span></span></div></div>`;
+
+  if(t.headsUp.length)h+=tier('Heads-up')+`<div class="box">${t.headsUp.map(itemRow).join('')}</div>`;
+
+  h+=tier('Your positions');
+  h+=t.chips.length?'<div class="chips">'+t.chips.map(c=>`<button class="chip ${c.state}" data-go="portfolio"><b>${esc(c.ticker)}</b> ${c.gain==null?'no price':pct(c.gain)} <span>stop ${rm(c.stop)}${c.room!=null?(c.room<=0?' · hit':` · ${(c.room*100).toFixed(0)}% away`):''}</span></button>`).join('')+'</div>'
+    :'<p class="note">No positions yet. Add them in Portfolio and this page will watch your stops.</p>';
+
+  h+=`<p class="note" style="margin-top:20px">${briefAt?`Headlines from Moomoo, updated ${clock(new Date(briefAt))} MYT. `:''}Market hours ignore public holidays. Educational only, not financial advice.</p>`;
+  $('tbody').innerHTML=h;
+}
+
+function renderWatch(){
+  $('wlchips').innerHTML=watch.map(t=>`<button data-rm="${esc(t)}" aria-label="Remove ${esc(t)}">${esc(t)} ✕</button>`).join('')||'<span class="mut">Empty</span>';
+  $('wladd').innerHTML=stocks.filter(s=>!watch.includes(s.ticker)).map(s=>`<option value="${esc(s.ticker)}">${esc(s.ticker)} · ${esc(s.name)}</option>`).join('');
+  $('wlbtn').disabled=watch.length>=8||!$('wladd').options.length;
+}
+function setWatch(next){watch=next;saveJSON('moomooiq.watch',watch);renderWatch();loadBrief()}
+$('wlbtn').onclick=()=>{const v=$('wladd').value;if(v&&watch.length<8)setWatch([...watch,v])};
+$('wlchips').onclick=e=>{const t=e.target.dataset.rm;if(t)setWatch(watch.filter(x=>x!==t))};
+$('trefresh').onclick=loadBrief;
+$('tbody').addEventListener('click',e=>{
+  if(e.target.id==='tretry')return loadBrief();
+  const go=e.target.closest('[data-go]'),an=e.target.closest('[data-an]');
+  if(an){
+    show('analyse');$('sector').value='';fillTickers();$('ticker').value=an.dataset.an;window.scrollTo(0,0);
+  }else if(go)show(go.dataset.go);
+});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-briefAt>10*60e3)loadBrief();else if(!document.hidden)renderToday()});
+setInterval(()=>{if(!document.hidden)renderToday()},60e3);
+loadBrief();
+
 renderTracker();
 </script>
 </body>

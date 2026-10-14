@@ -115,6 +115,7 @@
       const price = num(p.price);
       return { ticker, qty, cost, type: TYPES.includes(p.type) ? p.type : 'mid',
         high: Math.max(cost, num(p.high) || 0, price || 0), price: price > 0 ? price : null,
+        priceAt: price > 0 && typeof p.priceAt === 'string' && !Number.isNaN(Date.parse(p.priceAt)) ? p.priceAt : null,
         trimmed: p.trimmed === true, plan: typeof p.plan === 'string' ? p.plan.slice(0, 500) : '' };
     });
     const cash = num(d.cash);

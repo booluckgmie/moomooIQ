@@ -60,7 +60,7 @@ test('INARI worked example: RM71 total on RM424', () => {
 const { exportState, parseImport } = require('../public/tracker');
 
 test('export then import round-trips positions and cash', () => {
-  const state = { cash: '320', positions: [{ ticker: 'INARI', qty: 200, cost: 2.12, type: 'mid', high: 2.41, price: 2.41, trimmed: true, plan: 'trail' }] };
+  const state = { cash: '320', positions: [{ ticker: 'INARI', qty: 200, cost: 2.12, type: 'mid', high: 2.41, price: 2.41, priceAt: '2026-10-13T09:10:00.000Z', trimmed: true, plan: 'trail' }] };
   const back = parseImport(exportState(state));
   assert.deepStrictEqual(back.positions[0], state.positions[0]);
   assert.strictEqual(back.cash, '320');
@@ -79,7 +79,7 @@ test('import rejects junk, wrong app, bad numbers and oversize lists', () => {
 test('import drops unknown fields and coerces bad type/plan', () => {
   const r = parseImport(JSON.stringify({ app: 'moomooiq', version: 1, positions: [
     { ticker: 'gamuda', qty: 10, cost: 5, type: 'huge', evil: '<img onerror=x>', plan: 7 }] }));
-  assert.deepStrictEqual(Object.keys(r.positions[0]).sort(), ['cost', 'high', 'plan', 'price', 'qty', 'ticker', 'trimmed', 'type']);
+  assert.deepStrictEqual(Object.keys(r.positions[0]).sort(), ['cost', 'high', 'plan', 'price', 'priceAt', 'qty', 'ticker', 'trimmed', 'type']);
   assert.strictEqual(r.positions[0].type, 'mid');
   assert.strictEqual(r.positions[0].ticker, 'GAMUDA');
   assert.strictEqual(r.positions[0].plan, '');
@@ -126,4 +126,10 @@ test('sizing: qty is always a whole lot and loss never exceeds the risk budget',
 
 test('equityOf uses live price when set, else cost, plus cash', () => {
   assert.strictEqual(equityOf([{ qty: 100, cost: 2, price: 3 }, { qty: 100, cost: 1 }], 50), 450);
+});
+
+test('import drops a priceAt that is junk or has no price', () => {
+  const mk = (extra) => JSON.stringify({ app: 'moomooiq', version: 1, positions: [{ ticker: 'A', qty: 1, cost: 1, ...extra }] });
+  assert.strictEqual(parseImport(mk({ price: 2, priceAt: 'not a date' })).positions[0].priceAt, null);
+  assert.strictEqual(parseImport(mk({ priceAt: '2026-10-13T09:10:00.000Z' })).positions[0].priceAt, null);
 });
