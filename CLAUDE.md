@@ -17,8 +17,8 @@ Bursa Malaysia stock analysis SPA (Gemini) plus Claude Code skills for Moomoo Op
 
 ## Deploy (Vercel)
 - `vercel.json` serves `public/`; `api/*.js` wrap the same handlers in `netlify/functions/` via `api/_adapt.js` (Netlify still works).
-- Env vars (Production + Preview): `GEMINI_API_KEY`, optional `GEMINI_MODEL`, `ACCESS_TOKEN`. Don't set OPEND/BRIDGE vars; the bridge is local-only.
-- `/api/analyze` spends your Gemini quota: set `ACCESS_TOKEN` (UI has a field) and/or Vercel Deployment Protection.
+- Env vars (Production + Preview): `GEMINI_API_KEY`, optional `GEMINI_MODEL` (blank = auto-discovered newest stable flash; set it to force e.g. a pro model), `ACCESS_TOKEN`. Don't set OPEND/BRIDGE vars; the bridge is local-only.
+- `/api/analyze` spends your Gemini quota: set `ACCESS_TOKEN` (UI field remembers it in localStorage) and/or Vercel Deployment Protection.
 - `.vercelignore` keeps skills, bridge, docs and tests out of the deploy.
 
 ## Today page rules

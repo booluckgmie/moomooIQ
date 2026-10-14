@@ -16,14 +16,42 @@ Sentiment + Scenarios + Trade Plan: retail sentiment, analyst projections, four 
 Max 3 positions rule: say whether this deserves a slot.`,
 };
 
-async function gemini(prompt) {
-  const model = process.env.GEMINI_MODEL || 'gemini-1.5-pro';
+const FALLBACK_MODEL = 'gemini-2.5-flash';
+let discovered = null;                                   // survives warm invocations
+
+// Google retires model names, so don't hard-code one. GEMINI_MODEL wins; otherwise ask the API what
+// this key can use and take the newest stable "flash" (generous free-tier limits for 3 parallel calls).
+async function pickModel() {
+  if (process.env.GEMINI_MODEL) return process.env.GEMINI_MODEL;
+  if (discovered) return discovered;
+  try {
+    const res = await fetch(`${GEMINI}?pageSize=1000`, {
+      headers: { 'x-goog-api-key': process.env.GEMINI_API_KEY }, signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return FALLBACK_MODEL;
+    const names = ((await res.json()).models || [])
+      .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+      .map((m) => String(m.name).replace(/^models\//, ''))
+      .filter((n) => /^gemini-\d+(\.\d+)?-flash$/.test(n));
+    names.sort((a, b) => parseFloat(b.split('-')[1]) - parseFloat(a.split('-')[1]));
+    if (names[0]) discovered = names[0];
+    return discovered || FALLBACK_MODEL;
+  } catch { return FALLBACK_MODEL; }
+}
+
+function apiMessage(status, text) {
+  let msg = text;
+  try { msg = JSON.parse(text).error.message || text; } catch { /* not JSON */ }
+  return `Gemini ${status}: ${String(msg).replace(/\s+/g, ' ').slice(0, 220)}`;
+}
+
+async function gemini(prompt, model) {
   const res = await fetch(`${GEMINI}/${model}:generateContent`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
     body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+    signal: AbortSignal.timeout(50000),
   });
-  if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  if (!res.ok) throw new Error(apiMessage(res.status, await res.text()));
   const data = await res.json();
   return data.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '(no output)';
 }
@@ -46,11 +74,16 @@ exports.handler = async (event) => {
   if (!ticker || !/^[A-Za-z0-9 .&-]{1,40}$/.test(ticker)) return json(400, { error: 'Invalid ticker' });
   const label = name ? `${ticker} (${name})` : ticker;
 
+  const model = await pickModel();
   const keys = Object.keys(FRAMEWORKS);
-  const settled = await Promise.allSettled(keys.map((k) => gemini(FRAMEWORKS[k](label))));
+  const settled = await Promise.allSettled(keys.map((k) => gemini(FRAMEWORKS[k](label), model)));
+  if (settled.every((r) => r.status === 'rejected'))      // one clear error instead of three copies
+    return json(502, { error: `${settled[0].reason.message} (model: ${model})` });
   const result = {};
   settled.forEach((r, i) => {
     result[keys[i]] = r.status === 'fulfilled' ? r.value : `Error: ${r.reason.message}`;
   });
-  return json(200, { ticker, ...result, disclaimer: 'Educational only. Not financial advice.' });
+  return json(200, { ticker, model, ...result, disclaimer: 'Educational only. Not financial advice.' });
 };
+
+exports._resetModelCache = () => { discovered = null; };
