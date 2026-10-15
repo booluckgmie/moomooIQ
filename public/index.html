@@ -48,6 +48,15 @@ button.sm{padding:8px 12px;min-height:40px}
 .chip span{color:var(--mut)}.note{font-size:13px;color:var(--mut);margin:8px 2px}.banner{padding:10px 14px;border-radius:10px;background:var(--amb-bg);color:var(--amb);font-size:14px;margin-top:12px}
 details.card summary{cursor:pointer;font-weight:600}.wl{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
 .wl button{padding:6px 10px;min-height:36px;border-radius:999px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);font:inherit;cursor:pointer}
+/* AI sections */
+.md{font-size:15px;line-height:1.55;overflow-wrap:anywhere}.md h4{margin:14px 0 6px;font-size:16px}.md h5{margin:12px 0 4px;font-size:14px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+.md h4:first-child,.md h5:first-child{margin-top:0}.md p{margin:6px 0}.md ul,.md ol{margin:6px 0;padding-left:20px}.md li{margin:2px 0}
+.md blockquote{margin:8px 0;padding:6px 12px;border-left:3px solid var(--acc);background:var(--bg);border-radius:0 8px 8px 0}
+.md code{background:var(--bg);padding:1px 5px;border-radius:4px;font-size:13px}.md pre{background:var(--bg);padding:10px;border-radius:8px;overflow-x:auto;font-size:13px}.md hr{border:0;border-top:1px solid var(--bd);margin:12px 0}
+.tbl{overflow-x:auto;margin:8px 0}.md table{border-collapse:collapse;font-size:13px;min-width:100%}.md th,.md td{border:1px solid var(--bd);padding:6px 8px;text-align:left;vertical-align:top}.md th{background:var(--bg)}.md td,.md th{overflow-wrap:normal;word-break:normal;min-width:76px}
+.errbox{padding:10px 12px;border-radius:8px;background:var(--red-bg);color:var(--red);margin-bottom:8px}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--bd);border-top-color:var(--acc);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px}@keyframes sp{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.spin{animation:none}}
 @media(max-width:480px){.date{font-size:19px}main{padding:12px}}
 </style>
 </head>
@@ -78,9 +87,11 @@ details.card summary{cursor:pointer;font-weight:600}.wl{display:flex;flex-wrap:w
   <div class="card row">
     <select id="sector"></select>
     <select id="ticker"></select>
+    <input id="aprice" type="number" step="0.001" min="0" placeholder="Today's price RM (optional)" style="width:200px">
     <input id="atok" type="password" placeholder="Access token (saved in this browser)" autocomplete="off" size="26">
-    <button class="go" id="run">Run 3-framework analysis</button>
+    <button class="go" id="run">Run analysis</button>
   </div>
+  <div class="small mut" id="ainfo" style="margin:0 2px 10px"></div>
   <div id="out"></div>
 </section>
 <section id="news">
@@ -125,6 +136,7 @@ details.card summary{cursor:pointer;font-weight:600}.wl{display:flex;flex-wrap:w
 </section>
 </main>
 <script src="/tracker.js"></script>
+<script src="/md.js"></script>
 <script src="/today.js"></script>
 <script>
 const $=id=>document.getElementById(id);
@@ -147,18 +159,40 @@ fetch('/api/stocks').then(r=>r.json()).then(d=>{
 }).catch(()=>$('out').textContent='Could not load stock list.');
 try{$('atok').value=localStorage.getItem('moomooiq.atok')||''}catch(e){}
 $('atok').oninput=()=>{try{$('atok').value?localStorage.setItem('moomooiq.atok',$('atok').value):localStorage.removeItem('moomooiq.atok')}catch(e){}};
-$('run').onclick=async()=>{
-  const o=$('ticker').selectedOptions[0];if(!o)return;
-  $('run').disabled=true;$('out').innerHTML='<div class="card mut">Analysing…</div>';
+const SECTIONS={catalyst:'1 · Catalyst Breakdown',valuation:'2 · Financial Health & Valuation',scenarios:'3 · Sentiment, Scenarios & Trade Plan'};
+let job=null;
+const heldPrice=t=>{const p=state.positions.find(x=>x.ticker===t);return p&&p.price>0?p.price:null};
+// Each section is its own request, so a slow or busy one doesn't sink the others and can be retried alone.
+async function runSection(k,my=job){
+  const el=$('sec-'+k);if(!el||my!==job)return;
+  el.innerHTML=`<h3>${SECTIONS[k]}</h3><div class="mut"><span class="spin"></span> Working…</div>`;
   try{
-    const r=await fetch('/api/analyze',{method:'POST',headers:{'x-access-token':$('atok').value},body:JSON.stringify({ticker:o.value,name:o.dataset.name})});
-    const d=await r.json();if(!r.ok)throw new Error(d.error);
-    const T={catalyst:'1 · Catalyst Breakdown',valuation:'2 · Financial Health & Valuation',scenarios:'3 · Sentiment, Scenarios & Trade Plan'};
-    $('out').innerHTML=Object.keys(T).map(k=>`<div class="card"><h3>${T[k]}</h3><pre>${esc(d[k])}</pre></div>`).join('')
-      +`<div class="mut">${esc(d.disclaimer)}${d.model?' · model '+esc(d.model):''}</div>`;
-  }catch(e){$('out').innerHTML=`<div class="card">Error: ${esc(e.message)}${/token/i.test(e.message)?'<br><span class="mut">Re-enter the token above; it is saved after you type it.</span>':''}</div>`}
-  $('run').disabled=false;
+    const r=await fetch('/api/analyze',{method:'POST',headers:{'x-access-token':$('atok').value},
+      body:JSON.stringify({ticker:my.ticker,name:my.name,framework:k,price:my.price,slots:my.slots})});
+    const d=await r.json().catch(()=>({error:'Unexpected response ('+r.status+')'}));
+    if(!r.ok)throw new Error(d.error||'Error '+r.status);
+    if(my!==job)return;
+    el.innerHTML=`<h3>${SECTIONS[k]}</h3><div class="md">${Md.render(d.text)}</div><div class="small mut" style="margin-top:8px">${esc(d.model)}${d.headlines?` · ${d.headlines} recent headlines used`:''}</div>`;
+  }catch(e){
+    if(my!==job)return;
+    el.innerHTML=`<h3>${SECTIONS[k]}</h3><div class="errbox">${esc(e.message)}${/token/i.test(e.message)?' Re-enter it above; it is saved after you type it.':''}</div><button class="go sm" data-retry="${k}">Retry this section</button>`;
+  }
+  if(--my.pending<=0)$('run').disabled=false;
+}
+$('run').onclick=()=>{
+  const o=$('ticker').selectedOptions[0];if(!o)return;
+  const typed=+$('aprice').value||null,price=typed||heldPrice(o.value)||null;
+  job={ticker:o.value,name:o.dataset.name,price,slots:Math.min(3,state.positions.length),pending:3};
+  $('ainfo').textContent=price?`Working from RM${price} (${typed?'typed':'from your tracker'}). The AI has no live prices, so it only knows this one.`
+    :"No price given, so levels come back as % moves. Enter today's price above for RM levels.";
+  $('out').innerHTML=Object.keys(SECTIONS).map(k=>`<div class="card" id="sec-${k}"></div>`).join('')
+    +'<p class="note">Educational only, not financial advice. The AI uses general knowledge plus recent Moomoo headlines. Treat anything marked "approx." as unverified.</p>';
+  $('run').disabled=true;Object.keys(SECTIONS).forEach(k=>runSection(k));
 };
+$('out').addEventListener('click',e=>{
+  const k=e.target.dataset.retry;if(!k||!job)return;
+  job.pending++;$('run').disabled=true;runSection(k);
+});
 $('search').onclick=async()=>{
   const kw=$('kw').value.trim();if(!kw)return;
   $('nout').innerHTML='<div class="card mut">Searching…</div>';

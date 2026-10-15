@@ -3,30 +3,8 @@
 const S = require('../../lib/signals');
 const { flat } = require('./stocks');
 
-const BASE = 'https://ai-news-search.moomoo.com/news_search';
-const MAX_TICKERS = 12, PER_TYPE = 10, MAX_AGE_DAYS = 21, CONCURRENCY = 6;
-
-async function search(keyword, newsType) {
-  const url = new URL(BASE);
-  url.search = new URLSearchParams({ keyword, size: String(PER_TYPE), news_type: String(newsType), lang: 'en', sort_type: '2' });
-  const res = await fetch(url, { headers: { 'User-Agent': 'moomoo-news-search/0.0.2 (Skill)' }, signal: AbortSignal.timeout(10000) });
-  const data = await res.json();
-  if (data.code !== 0) throw new Error(`upstream code ${data.code}`);
-  return data.data || [];
-}
-
-function safeUrl(u) {
-  try { const x = new URL(u); return x.protocol === 'https:' && /(^|\.)moomoo\.com$/.test(x.hostname) ? x.href : ''; } catch { return ''; }
-}
-
-function shape(raw, kind, stock, now) {
-  const ts = Number(raw.publish_time) * (Number(raw.publish_time) > 1e11 ? 1 : 1000);
-  if (!ts || now - ts > MAX_AGE_DAYS * 864e5) return null;
-  if (!S.relevant(raw.title, stock)) return null;
-  if (kind === 'notice' && !S.noticeWorthKeeping(raw.title)) return null;
-  return { kind, title: S.strip(raw.title), published: new Date(ts).toISOString(), url: safeUrl(raw.url),
-    tone: S.tone(raw.title), tags: S.tags(raw.title), exDividend: S.exDividendDate(raw.title) };
-}
+const F = require('../../lib/newsfeed');
+const MAX_TICKERS = 12, MAX_AGE_DAYS = 21, CONCURRENCY = 6;
 
 async function pool(jobs, n) {
   const out = new Array(jobs.length); let i = 0;
@@ -47,8 +25,8 @@ exports.handler = async (event) => {
 
   const universe = Object.fromEntries(flat().map((s) => [s.ticker, s]));
   const stocks = tickers.map((t) => universe[t] || { ticker: t, name: t });   // unknown tickers search by their own text
-  const jobs = stocks.flatMap((s) => [[s, 'news', 1], [s, 'notice', 2]].map(([st, kind, type]) => async () => ({
-    stock: st, kind, rows: await search(S.keywordFor(st), type) })));
+  const jobs = stocks.flatMap((s) => [[s, 'news'], [s, 'notice']].map(([st, kind]) => async () => ({
+    stock: st, kind, rows: await F.search(S.keywordFor(st), kind) })));
   const results = await pool(jobs, CONCURRENCY);
 
   const now = Date.now(), out = {}, failed = [];
@@ -57,7 +35,7 @@ exports.handler = async (event) => {
     if (!r.ok) { failed.push(String(r.e && r.e.message || r.e)); continue; }
     const { stock, kind, rows } = r.v, seen = new Set(out[stock.ticker].items.map((i) => i.title));
     for (const row of rows) {
-      const it = shape(row, kind, stock, now);
+      const it = F.shape(row, kind, stock, now, MAX_AGE_DAYS);
       if (it && !seen.has(it.title)) { seen.add(it.title); out[stock.ticker].items.push(it); }
     }
   }
