@@ -3,12 +3,13 @@
 Bursa Malaysia stock analysis SPA (Gemini) plus Claude Code skills for Moomoo OpenAPI.
 
 ## Layout
-- `public/index.html` – SPA; **Today** is the default tab (Needs action / Best opportunities / Heads-up / Your positions), then Analyse, News, Portfolio
+- `public/index.html` – SPA; **Today** is the default tab (Needs action / Best opportunities / Heads-up / Your positions), then Analyse, News, Portfolio, Usage
 - `public/today.js` – pure Today logic: market hours (MYT), next-check time, price freshness, tier building, ranking
 - `lib/signals.js` – headline relevance filter + keyword tone/tags (server side); `netlify/functions/brief.js` (+ `api/brief.js`) batches Moomoo news/notices for a ticker list
 - `netlify/functions/` – `analyze.js` (Gemini; ONE section per request, the page fires 3 in parallel; retries transient errors, falls back across auto-discovered models, grounds the prompt with today's date + verified Moomoo headlines + the user's price, forbids invented prices), `lib/newsfeed.js` (shared Moomoo fetch + 5-min cache), `public/md.js` (safe markdown renderer for model output), `stocks.js` (universe), `moomoo-news.js` (public Moomoo news API)
 - `public/tracker.js` – pure portfolio rules engine (stops, ladder, trim, alerts, position sizing [2% risk default, 100-share lots, 1/3 slot cap, RM200 cash buffer], export/import JSON v1 with validation); tests in `tests/`. Positions live in the browser's localStorage only.
 - `bridge/opend_bridge.py` – local read-only HTTP bridge to OpenD (token-auth, allowlisted vendor scripts, no trading endpoints)
+- **Usage** tab + `netlify/functions/analytics.js` (+ `api/analytics.js`) – Vercel Web Analytics aggregates (views, visitors, daily chart, top pages/countries/devices/referrers). Needs `VERCEL_ANALYTICS_TOKEN`; without it (or on Netlify) answers `{connected:false, reason}` and the tab shows setup copy instead of numbers. The tracking beacon (`/_vercel/insights/script.js`) is in `index.html`; it only resolves and reports on the Vercel deployment.
 - `.claude/skills/` – official Moomoo skills v2.1 (news-search, stock-digest, comment-sentiment, capital/derivatives/technical-anomaly), plus `moomooapi` and `install-moomoo-opend` (vendor files; re-download from https://www.moomoo.com/skills/moomoo-install.md to update)
 
 ## Commands
@@ -18,6 +19,7 @@ Bursa Malaysia stock analysis SPA (Gemini) plus Claude Code skills for Moomoo Op
 ## Deploy (Vercel)
 - `vercel.json` serves `public/`; `api/*.js` wrap the same handlers in `netlify/functions/` via `api/_adapt.js` (Netlify still works).
 - Env vars (Production + Preview): `GEMINI_API_KEY`, optional `GEMINI_MODEL` (blank = auto-discovered newest stable flash; set it to force e.g. a pro model), `ACCESS_TOKEN`. Don't set OPEND/BRIDGE vars; the bridge is local-only.
+- Usage tab: enable Web Analytics on the Vercel project (Analytics tab → Enable), then set `VERCEL_ANALYTICS_TOKEN` (Production + Preview) and redeploy. See `.env.example` for the optional overrides.
 - `/api/analyze` spends your Gemini quota: set `ACCESS_TOKEN` (UI field remembers it in localStorage) and/or Vercel Deployment Protection.
 - `.vercelignore` keeps skills, bridge, docs and tests out of the deploy.
 

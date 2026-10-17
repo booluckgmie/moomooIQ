@@ -55,6 +55,14 @@ details.card summary{cursor:pointer;font-weight:600}.wl{display:flex;flex-wrap:w
 .md code{background:var(--bg);padding:1px 5px;border-radius:4px;font-size:13px}.md pre{background:var(--bg);padding:10px;border-radius:8px;overflow-x:auto;font-size:13px}.md hr{border:0;border-top:1px solid var(--bd);margin:12px 0}
 .tbl{overflow-x:auto;margin:8px 0}.md table{border-collapse:collapse;font-size:13px;min-width:100%}.md th,.md td{border:1px solid var(--bd);padding:6px 8px;text-align:left;vertical-align:top}.md th{background:var(--bg)}.md td,.md th{overflow-wrap:normal;word-break:normal;min-width:76px}
 .errbox{padding:10px 12px;border-radius:8px;background:var(--red-bg);color:var(--red);margin-bottom:8px}
+/* Usage */
+.stats{display:flex;gap:12px;flex-wrap:wrap}.stat{flex:1;min-width:130px}.sv{font-size:28px;font-weight:700;line-height:1.1}.sl{font-size:12px;margin-top:4px}
+.chart{display:flex;align-items:flex-end;gap:3px;height:56px;margin:10px 0 4px}
+.bar{flex:1;min-width:3px;background:var(--acc);border-radius:2px 2px 0 0;opacity:.85}.bar:hover{opacity:1}
+.cols{display:flex;gap:12px;flex-wrap:wrap}.cols .card{flex:1;min-width:220px}
+.ulist{list-style:none;margin:0;padding:0;font-size:14px}
+.ulist li{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--bd)}
+.ulist li:first-child{border-top:0}.ulist span{overflow-wrap:anywhere;min-width:0}.ulist b{flex:none;color:var(--mut);font-weight:600}
 .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--bd);border-top-color:var(--acc);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px}@keyframes sp{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.spin{animation:none}}
 @media(max-width:480px){.date{font-size:19px}main{padding:12px}}
@@ -67,6 +75,7 @@ details.card summary{cursor:pointer;font-weight:600}.wl{display:flex;flex-wrap:w
   <button data-tab="analyse">📊 Analyse</button>
   <button data-tab="news">📰 News</button>
   <button data-tab="portfolio">💼 Portfolio</button>
+  <button data-tab="usage">📈 Usage</button>
 </nav>
 <main>
 <section id="today" class="on">
@@ -134,6 +143,10 @@ details.card summary{cursor:pointer;font-weight:600}.wl{display:flex;flex-wrap:w
   </div>
   <div id="pout"></div>
 </section>
+<section id="usage">
+  <div class="card"><h3>Site usage</h3><p class="mut">Visits to this site, via Vercel Web Analytics. Aggregates only — no visitor-level data.</p></div>
+  <div id="uout"><div class="card mut">Loading…</div></div>
+</section>
 </main>
 <script src="/tracker.js"></script>
 <script src="/md.js"></script>
@@ -146,7 +159,11 @@ function show(tab){
   document.querySelectorAll('nav button,main section').forEach(e=>e.classList.remove('on'));
   document.querySelector(`nav button[data-tab="${tab}"]`).classList.add('on');$(tab).classList.add('on');window.scrollTo(0,0);
 }
-document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>show(b.dataset.tab));
+let usageLoaded=false;
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+  show(b.dataset.tab);
+  if(b.dataset.tab==='usage'&&!usageLoaded){usageLoaded=true;loadUsage()}
+});
 function fillTickers(){
   const sec=$('sector').value;
   $('ticker').innerHTML=stocks.filter(s=>!sec||s.sector===sec)
@@ -202,6 +219,48 @@ $('search').onclick=async()=>{
   $('nout').innerHTML=d.items.length?d.items.map(i=>`<div class="card"><b>${i.url?`<a href="${esc(i.url)}" target="_blank" rel="noopener noreferrer">${esc(i.title)}</a>`:esc(i.title)}</b><div class="mut">${i.published?esc(new Date(i.published).toLocaleString()):''}</div></div>`).join('')+`<div class="mut">${esc(d.disclaimer)}</div>`
     :'<div class="card mut">No results.</div>';
 };
+/* ---------- Usage ---------- */
+const USAGE_REASONS={
+  no_token:'Web Analytics is not connected yet.',
+  no_project:'No Vercel project id found for this deployment.',
+  api_error:'Could not reach Vercel Analytics right now.',
+};
+function renderUsage(d){
+  if(!d||!d.connected){
+    const why=USAGE_REASONS[d&&d.reason]||'Site usage is not available right now.';
+    $('uout').innerHTML=`<div class="card"><p>${esc(why)}</p>
+      <p class="small mut">Turn on Web Analytics in the Vercel dashboard → Analytics tab → Enable, then add <code>VERCEL_ANALYTICS_TOKEN</code> (a Vercel access token that can read this project) as an env var and redeploy.</p>
+      ${d&&d.detail?`<p class="small mut">Detail: ${esc(d.detail)}</p>`:''}</div>`;
+    return;
+  }
+  const max=Math.max(1,...d.daily.map(r=>r.views));
+  const bars=d.daily.map(r=>`<div class="bar" style="height:${Math.max(2,Math.round(r.views/max*52))}px" title="${esc(r.key)}: ${r.views} views"></div>`).join('');
+  const list=(rows,label)=>rows.length?`<ul class="ulist">${rows.map(r=>`<li><span>${esc(r.key)}</span><b>${r.views}</b></li>`).join('')}</ul>`
+    :`<p class="small mut">No ${esc(label)} data yet.</p>`;
+  $('uout').innerHTML=`
+    <div class="card stats">
+      <div class="stat"><div class="sv">${d.totals.views.toLocaleString()}</div><div class="sl mut">Page views · last ${d.days}d</div></div>
+      <div class="stat"><div class="sv">${d.totals.visitors.toLocaleString()}</div><div class="sl mut">Visitors · last ${d.days}d</div></div>
+    </div>
+    <div class="card"><h3>Daily views</h3><div class="chart">${bars||'<span class="mut">No data yet.</span>'}</div><p class="small mut">${esc(d.since)} to ${esc(d.until)}</p></div>
+    <div class="cols">
+      <div class="card"><h3>Top pages</h3>${list(d.pages,'page')}</div>
+      <div class="card"><h3>Countries</h3>${list(d.countries,'country')}</div>
+    </div>
+    <div class="cols">
+      <div class="card"><h3>Devices</h3>${list(d.devices,'device')}</div>
+      <div class="card"><h3>Referrers</h3>${list(d.referrers,'referrer')}</div>
+    </div>`;
+}
+async function loadUsage(){
+  $('uout').innerHTML='<div class="card mut">Loading…</div>';
+  try{
+    const r=await fetch('/api/analytics');
+    renderUsage(await r.json());
+  }catch(e){
+    $('uout').innerHTML='<div class="card">Could not load site usage.</div>';
+  }
+}
 const KEY='moomooiq.tracker';
 let state={positions:[],cash:''};
 try{state=Object.assign(state,JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){}
@@ -377,5 +436,7 @@ loadBrief();
 
 renderTracker();
 </script>
+<script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
+<script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>
