@@ -34,6 +34,14 @@ test('stocks endpoint works through the adapter', async () => {
   assert.ok(JSON.parse(res.body).stocks.length >= 35);
 });
 
+test('analytics endpoint works through the adapter and degrades without a token', async () => {
+  delete process.env.VERCEL_ANALYTICS_TOKEN;
+  const res = mockRes();
+  await require('../api/analytics')({ method: 'GET', url: '/api/analytics' }, res);
+  assert.strictEqual(res.code, 200);
+  assert.deepStrictEqual(JSON.parse(res.body), { connected: false, reason: 'no_token' });
+});
+
 test('analyze enforces ACCESS_TOKEN when configured', async () => {
   process.env.ACCESS_TOKEN = 'sekret'; process.env.GEMINI_API_KEY = 'k';
   const call = async (tok) => { const r = mockRes();
