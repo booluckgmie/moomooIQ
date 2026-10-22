@@ -48,6 +48,11 @@ button.sm{padding:8px 12px;min-height:40px}
 .chip span{color:var(--mut)}.note{font-size:13px;color:var(--mut);margin:8px 2px}.banner{padding:10px 14px;border-radius:10px;background:var(--amb-bg);color:var(--amb);font-size:14px;margin-top:12px}
 details.card summary{cursor:pointer;font-weight:600}.wl{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
 .wl button{padding:6px 10px;min-height:36px;border-radius:999px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);font:inherit;cursor:pointer}
+/* Pre-trade check */
+.verdict{padding:10px 14px;border-radius:10px;font-weight:600;margin-bottom:6px}.verdict.PASS{background:var(--grn-bg);color:var(--grn)}.verdict.WARN{background:var(--amb-bg);color:var(--amb)}.verdict.BLOCK{background:var(--red-bg);color:var(--red)}
+.ck{display:flex;gap:10px;padding:5px 2px;font-size:14px;overflow-wrap:anywhere}.ck>span:first-child{flex:none;width:16px;text-align:center;font-weight:700}
+.ck.pass>span:first-child{color:var(--grn)}.ck.warn>span:first-child{color:var(--amb)}.ck.block>span:first-child{color:var(--red)}.ck.info>span:first-child{color:var(--mut)}
+.obtn{display:flex;flex-direction:column;gap:6px}.obtn .go.alt{background:var(--card);color:var(--fg);border:1px solid var(--bd)}
 /* AI sections */
 .md{font-size:15px;line-height:1.55;overflow-wrap:anywhere}.md h4{margin:14px 0 6px;font-size:16px}.md h5{margin:12px 0 4px;font-size:14px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
 .md h4:first-child,.md h5:first-child{margin-top:0}.md p{margin:6px 0}.md ul,.md ol{margin:6px 0;padding-left:20px}.md li{margin:2px 0}
@@ -126,11 +131,22 @@ details.card summary{cursor:pointer;font-weight:600}.wl{display:flex;flex-wrap:w
   <div class="card">
     <h3>Position sizing (8% stop)</h3>
     <div class="row">
-      <input id="se" type="number" step="0.001" placeholder="Entry price RM" style="width:130px">
+      <input id="se" type="number" step="0.001" placeholder="Entry price RM" style="width:160px">
       <input id="sr" type="number" step="0.1" min="0.1" max="10" style="width:90px" title="Max loss if the stop hits, % of equity">
       <span class="mut" style="align-self:center">% risk of equity</span>
     </div>
     <div id="sout" style="margin-top:8px"></div>
+  </div>
+  <div class="card">
+    <h3>Pre-trade check</h3>
+    <p class="note" style="margin:0 0 8px">Test a buy against your rules and today's news before you place it at your broker. Advice only: this page never places orders.</p>
+    <div class="row">
+      <input id="ct" list="ctl" placeholder="Ticker" size="9" autocomplete="off"><datalist id="ctl"></datalist>
+      <input id="cq" type="number" min="1" step="1" placeholder="Shares" style="width:90px">
+      <input id="cp" type="number" step="0.001" placeholder="Price RM" style="width:100px">
+      <button class="go" id="cgo">Check</button>
+    </div>
+    <div id="cout" style="margin-top:10px"></div>
   </div>
   <div id="pout"></div>
 </section>
@@ -155,7 +171,7 @@ function fillTickers(){
 fetch('/api/stocks').then(r=>r.json()).then(d=>{
   stocks=d.stocks;
   $('sector').innerHTML='<option value="">All sectors</option>'+d.sectors.map(s=>`<option>${esc(s)}</option>`).join('');
-  $('sector').onchange=fillTickers;fillTickers();renderWatch();renderToday();
+  $('sector').onchange=fillTickers;fillTickers();renderWatch();fillCheckList();renderToday();
 }).catch(()=>$('out').textContent='Could not load stock list.');
 try{$('atok').value=localStorage.getItem('moomooiq.atok')||''}catch(e){}
 $('atok').oninput=()=>{try{$('atok').value?localStorage.setItem('moomooiq.atok',$('atok').value):localStorage.removeItem('moomooiq.atok')}catch(e){}};
@@ -341,7 +357,7 @@ function renderToday(){
       <div class="oh"><b class="tk">${esc(o.ticker)}</b><span class="nm">${esc(nameOf(o.ticker))}</span><span class="sig" title="Headline momentum">${'●'.repeat(o.dots)}${'○'.repeat(3-o.dots)}</span></div>
       ${o.url?`<a class="hl" href="${esc(o.url)}" target="_blank" rel="noopener noreferrer">${esc(o.title)}</a>`:`<span class="hl">${esc(o.title)}</span>`}
       <div class="sub">${esc(o.sub)}${o.isNew?' · <span class="new">NEW</span>':''}</div></div>
-      <button class="go sm" data-an="${esc(o.ticker)}">Analyse</button></div>`).join('')+'</div>';
+      <div class="obtn"><button class="go sm" data-an="${esc(o.ticker)}">Analyse</button><button class="go sm alt" data-ck="${esc(o.ticker)}">Check buy</button></div></div>`).join('')+'</div>';
     h+=`<p class="note">${t.slotsFull?'All 3 slots are used, so these are for watching only. ':''}Ranked by recent headlines only, not price or valuation. Run Analyse and check your rules before buying.</p>`;
   }else h+=`<div class="box"><div class="item"><span class="rt"><b>No standout setup today</b><span class="sub">Quiet is fine. One good stock beats five average ones.</span></span></div></div>`;
 
@@ -366,14 +382,41 @@ $('wlchips').onclick=e=>{const t=e.target.dataset.rm;if(t)setWatch(watch.filter(
 $('trefresh').onclick=loadBrief;
 $('tbody').addEventListener('click',e=>{
   if(e.target.id==='tretry')return loadBrief();
-  const go=e.target.closest('[data-go]'),an=e.target.closest('[data-an]');
-  if(an){
+  const go=e.target.closest('[data-go]'),an=e.target.closest('[data-an]'),ck=e.target.closest('[data-ck]');
+  if(ck){show('portfolio');$('ct').value=ck.dataset.ck;$('cout').innerHTML='';$('cq').focus();}
+  else if(an){
     show('analyse');$('sector').value='';fillTickers();$('ticker').value=an.dataset.an;window.scrollTo(0,0);
   }else if(go)show(go.dataset.go);
 });
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-briefAt>10*60e3)loadBrief();else if(!document.hidden)renderToday()});
 setInterval(()=>{if(!document.hidden)renderToday()},60e3);
 loadBrief();
+
+/* ---------- Pre-trade check ---------- */
+function fillCheckList(){$('ctl').innerHTML=stocks.map(s=>`<option value="${esc(s.ticker)}">${esc(s.name)}</option>`).join('')}
+async function newsForCheck(t){
+  try{
+    const r=await fetch('/api/brief?tickers='+encodeURIComponent(t));
+    if(!r.ok)return null;
+    const d=await r.json();
+    return Today.newsForCheck(d.tickers&&d.tickers[t],new Date());
+  }catch(e){return null}
+}
+$('cp').oninput=()=>{$('cp').dataset.t='1'};
+$('se').addEventListener('input',()=>{if(!$('cp').dataset.t)$('cp').value=$('se').value});
+const CK_ICON={pass:'✓',warn:'⚠',block:'✕',info:'ℹ'};
+const CK_TEXT={PASS:'Within your rules. Not a buy signal.',WARN:'Allowed, but read the warnings first.',BLOCK:'Breaks a rule. Fix it or skip this trade.'};
+$('cgo').onclick=async()=>{
+  const t=$('ct').value.trim().toUpperCase();
+  if(!/^[A-Z0-9.&-]{1,20}$/.test(t)){$('cout').innerHTML='<div class="errbox">Enter a ticker, e.g. INARI.</div>';return}
+  $('cgo').disabled=true;$('cout').innerHTML='<div class="mut"><span class="spin"></span> Checking your rules and today\'s news…</div>';
+  const news=await newsForCheck(t);
+  const r=Tracker.preTradeCheck({ticker:t,qty:+$('cq').value,price:+$('cp').value,positions:state.positions,cash:state.cash,riskPct:(+$('sr').value||2)/100,news});
+  $('cout').innerHTML=`<div class="verdict ${r.verdict}">${r.verdict}: ${CK_TEXT[r.verdict]}</div>`
+    +r.checks.map(c=>`<div class="ck ${c.level}"><span>${CK_ICON[c.level]}</span><span>${esc(c.text)}</span></div>`).join('')
+    +'<p class="note">A rules check, not a recommendation. A PASS never means "buy".</p>';
+  $('cgo').disabled=false;
+};
 
 renderTracker();
 </script>

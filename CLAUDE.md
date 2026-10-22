@@ -8,8 +8,11 @@ Bursa Malaysia stock analysis SPA (Gemini) plus Claude Code skills for Moomoo Op
 - `lib/signals.js` – headline relevance filter + keyword tone/tags (server side); `netlify/functions/brief.js` (+ `api/brief.js`) batches Moomoo news/notices for a ticker list
 - `netlify/functions/` – `analyze.js` (Gemini; ONE section per request, the page fires 3 in parallel; retries transient errors, falls back across auto-discovered models, grounds the prompt with today's date + verified Moomoo headlines + the user's price, forbids invented prices), `lib/newsfeed.js` (shared Moomoo fetch + 5-min cache), `public/md.js` (safe markdown renderer for model output), `stocks.js` (universe), `moomoo-news.js` (public Moomoo news API)
 - `public/tracker.js` – pure portfolio rules engine (stops, ladder, trim, alerts, position sizing [2% risk default, 100-share lots, 1/3 slot cap, RM200 cash buffer], export/import JSON v1 with validation); tests in `tests/`. Positions live in the browser's localStorage only.
+- Pre-trade check: `preTradeCheck` in `tracker.js` (slots, RM200 cash buffer, 1/3 cap, 2% risk at the 8% stop, 100-lot, adding-to-loser, plus bad news / results week / ex-dividend from `Today.newsForCheck`). Advisory only: it never places or sends an order. Adapted from the `trader-risk` idea.
 - `bridge/opend_bridge.py` – local read-only HTTP bridge to OpenD (token-auth, allowlisted vendor scripts, no trading endpoints)
 - `.claude/skills/` – official Moomoo skills v2.1 (news-search, stock-digest, comment-sentiment, capital/derivatives/technical-anomaly), plus `moomooapi` and `install-moomoo-opend` (vendor files; re-download from https://www.moomoo.com/skills/moomoo-install.md to update)
+
+- `.claude/skills/trader-*` – 11 third-party skills (MIT, pinned + reviewed; see `docs/third-party/trader-skill/PROVENANCE.md`). **US-market only** (SEC 13F/EDGAR, Congress PTRs, NYSE calendar, US tax, Alpaca/IBKR). Do NOT use them for Bursa stocks: use the `moomoo-*` skills and this app. Their broker skill needs 3 approval gates; never set an order tool to "Always allow".
 
 ## Commands
 - `npm test` – JS + bridge unit tests; `npm run dev` – `netlify dev`; `npm run deploy`

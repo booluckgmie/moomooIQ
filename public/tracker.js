@@ -92,6 +92,58 @@
       maxLossPct: r3((qty * perShare) / equity), pctOfEquity: r3((qty * entry) / equity), boundBy: bound };
   }
 
+  // Pre-trade check (idea adapted from the trader-risk skill, rewritten for Bursa and this app's rules).
+  // Advisory only: a PASS is "allowed to consider", never a buy signal. It cannot place or send anything.
+  // news: null (unavailable) or { bad: {title, daysAgo}|null, results: {daysAgo}|null, exDiv: {days}|null }.
+  function preTradeCheck({ ticker, qty, price, positions = [], cash = 0, riskPct = 0.02, news = null, lot = 100 }, rules = RULES) {
+    const checks = [];
+    const add = (level, text) => checks.push({ level, text });
+    const q = Number(qty), px = Number(price), free = Number(cash) || 0;
+    const rm = (n) => 'RM' + (Math.round(n * 100) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const pc = (n) => Math.round(n * 1000) / 10 + '%';
+    if (!(q > 0) || !Number.isInteger(q) || !(px > 0))
+      return { verdict: 'BLOCK', checks: [{ level: 'block', text: 'Enter a whole number of shares and a price above zero.' }] };
+
+    const equity = equityOf(positions, free), cost = q * px;
+    const held = positions.find((p) => p.ticker === String(ticker).toUpperCase());
+    const heldValue = held ? (Number(held.price) > 0 ? Number(held.price) : Number(held.cost)) * Number(held.qty) : 0;
+    const stop = px * (1 - rules.initialStop), maxLoss = cost * rules.initialStop;
+
+    if (held) add('pass', `Adding to an existing position (${positions.length} of ${rules.maxPositions} slots used).`);
+    else if (positions.length >= rules.maxPositions) add('block', `All ${rules.maxPositions} slots are used. Close one before opening another.`);
+    else add('pass', `A slot is free (${positions.length} of ${rules.maxPositions} used).`);
+
+    const room = free - rules.cashBuffer;
+    if (cost > room) add('block', `Needs ${rm(cost)} but only ${rm(Math.max(0, room))} is free after the RM${rules.cashBuffer} cash buffer.`);
+    else add('pass', `Leaves ${rm(free - cost)} in cash (the RM${rules.cashBuffer} buffer is kept).`);
+
+    const share = equity > 0 ? (heldValue + cost) / equity : Infinity, cap = 1 / rules.maxPositions;
+    if (share > cap + 1e-9) add('block', `The position would be ${pc(share)} of equity; the cap is ${pc(cap)} (one third).`);
+    else add('pass', `Position would be ${pc(share)} of equity (cap ${pc(cap)}).`);
+
+    const lossShare = equity > 0 ? maxLoss / equity : Infinity;
+    if (lossShare > riskPct + 1e-9) add('block', `Losing ${rm(maxLoss)} at the 8% stop is ${pc(lossShare)} of equity; your limit is ${pc(riskPct)}.`);
+    else add('pass', `Max loss at the stop is ${rm(maxLoss)} (${pc(lossShare)} of equity; limit ${pc(riskPct)}).`);
+
+    if (q % lot !== 0) add('warn', `${q} is not a multiple of ${lot}. Odd lots trade on a separate, thinner board.`);
+    else add('pass', `Whole board lots of ${lot}.`);
+
+    if (held && Number(held.price) > 0 && Number(held.price) < Number(held.cost))
+      add('warn', `You would be adding to a position that is ${pc(1 - held.price / held.cost)} below your cost. Averaging down breaks "cut losers, don't add".`);
+
+    if (news === null) add('info', 'News check unavailable right now, so check headlines yourself.');
+    else {
+      if (news.bad) add('warn', `Bad news ${news.bad.daysAgo}d ago: "${news.bad.title}"`);
+      if (news.results) add('warn', `Results announced ${news.results.daysAgo}d ago. Earnings week means smaller size: read it first.`);
+      if (news.exDiv) add('warn', `Goes ex-dividend in ${news.exDiv.days} day${news.exDiv.days === 1 ? '' : 's'}: the price drops by the dividend on that day.`);
+      if (!news.bad && !news.results && !news.exDiv) add('pass', 'No bad news, results or ex-dividend in the recent window (headline check only).');
+    }
+    add('info', `If you go ahead: set a stop at ${rm(stop)} (8% below) the same day, and a target at ${rm(px * (1 + rules.target))}.`);
+
+    const verdict = checks.some((c) => c.level === 'block') ? 'BLOCK' : checks.some((c) => c.level === 'warn') ? 'WARN' : 'PASS';
+    return { verdict, checks, cost: r3(cost), stop: r3(stop), maxLoss: r3(maxLoss), equity: r3(equity) };
+  }
+
   // Export / import. Import validates and keeps known fields only (file may come from anywhere).
   const TYPES = ['small', 'mid', 'large'];
   const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -122,7 +174,7 @@
     return { positions, cash: cash == null ? '' : String(cash) };
   }
 
-  const api = { RULES, evaluate, portfolio, equityOf, sizeTrade, exportState, parseImport };
+  const api = { RULES, evaluate, portfolio, equityOf, sizeTrade, preTradeCheck, exportState, parseImport };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Tracker = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -100,3 +100,17 @@ test('ex-dividend within 10 days is a heads-up; past ones are not', () => {
   assert.strictEqual(r.headsUp.length, 1);
   assert.match(r.headsUp[0].title, /ex-dividend in 3 days/);
 });
+
+test('newsForCheck: bad news, results notice and ex-dividend within 3 days; quiet entries are all null', () => {
+  const entry = { items: [
+    item('Sime Darby Hit With RM150.2 Mil Tax Bill', '2026-10-13T10:24:00+08:00', -2.5, { tags: ['legal'] }),
+    item('INARI: Quarterly rpt for the financial period ended', '2026-10-12T20:00:00+08:00', 0, { kind: 'notice', tags: ['results'] }),
+    item('INARI To Go Ex-Dividend On October 16th, 2026', '2026-10-10T01:00:00+08:00', 0, { exDividend: '2026-10-16' }),
+    item('INARI To Go Ex-Dividend On October 30th, 2026', '2026-10-10T01:00:00+08:00', 0, { exDividend: '2026-10-30' })] };
+  const n = T.newsForCheck(entry, NOW);
+  assert.deepStrictEqual([n.bad.title, n.bad.daysAgo], ['Sime Darby Hit With RM150.2 Mil Tax Bill', 1]);
+  assert.strictEqual(n.results.daysAgo, 2);
+  assert.deepStrictEqual(n.exDiv, { days: 2 });                                  // 16 Oct is 2 days away; 30 Oct is outside the 3-day window
+  assert.deepStrictEqual(T.newsForCheck({ items: [] }, NOW), { bad: null, results: null, exDiv: null });
+  assert.deepStrictEqual(T.newsForCheck(undefined, NOW), { bad: null, results: null, exDiv: null });
+});

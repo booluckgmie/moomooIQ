@@ -71,6 +71,21 @@
     return { score: Math.max(-6, Math.min(6, score)), bad, best: best && best.it };
   }
 
+  // Summarise one ticker's headlines for the pre-trade check. entry undefined => nothing found (not "unavailable").
+  function newsForCheck(entry, now) {
+    const items = (entry && entry.items) || [], today0 = startOfDay(now);
+    const days = (iso) => Math.max(0, Math.round((now.getTime() - Date.parse(iso)) / D));
+    const bad = analyse(entry, now).bad[0];
+    const res = items.find((i) => i.kind === 'notice' && i.tags.includes('results') && ageH(i.published, now) <= 72);
+    let exDiv = null;
+    for (const i of items) {
+      if (!i.exDividend) continue;
+      const n = Math.round((Date.parse(`${i.exDividend}T00:00:00+08:00`) - today0) / D);
+      if (n >= 0 && n <= 3 && (!exDiv || n < exDiv.days)) exDiv = { days: n };
+    }
+    return { bad: bad ? { title: bad.title, daysAgo: days(bad.published) } : null, results: res ? { daysAgo: days(res.published) } : null, exDiv };
+  }
+
   const money = (n) => `RM${Number(n).toFixed(2)}`;
 
   function buildToday({ now, brief, positions = [], portfolio, watch = [], maxPositions = 3, sinceVisit = null }) {
@@ -152,7 +167,7 @@
       slotsFull: positions.length >= maxPositions, newsMissing: !brief };
   }
 
-  const api = { marketStatus, nextCheck, lastClose, priceIsFresh, rollVisit, timeAgo, analyse, buildToday, weight, dots, MIN_OPP_SCORE };
+  const api = { marketStatus, nextCheck, lastClose, priceIsFresh, rollVisit, timeAgo, analyse, buildToday, newsForCheck, weight, dots, MIN_OPP_SCORE };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Today = api;
 })(typeof window !== 'undefined' ? window : globalThis);
