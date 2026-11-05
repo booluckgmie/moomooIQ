@@ -4,11 +4,12 @@
   "private": true,
   "description": "Bursa Malaysia stock analysis (Gemini) + Moomoo OpenAPI skills",
   "scripts": {
-    "dev": "netlify dev",
-    "deploy": "netlify deploy --prod",
+    "dev": "npx --yes --package netlify-cli netlify dev",
+    "deploy": "npx --yes --package netlify-cli netlify deploy --prod",
     "deploy:vercel": "vercel --prod",
     "test": "node --test \"netlify/functions/*.test.js\" \"tests/*.test.js\" && python3 -m unittest discover -s bridge"
   },
-  "engines": { "node": ">=18" },
-  "devDependencies": { "netlify-cli": "^17.0.0" }
+  "engines": {
+    "node": "24.x"
+  }
 }

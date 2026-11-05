@@ -26,6 +26,7 @@ Bursa Malaysia stock analysis SPA (Gemini) plus Claude Code skills for Moomoo Op
 - Usage tab: enable Web Analytics on the Vercel project (Analytics tab → Enable), then set `VERCEL_ANALYTICS_TOKEN` (Production + Preview) and redeploy. See `.env.example` for the optional overrides.
 - `/api/analyze` spends your Gemini quota: set `ACCESS_TOKEN` (UI field remembers it in localStorage) and/or Vercel Deployment Protection.
 - `.vercelignore` keeps skills, bridge, docs and tests out of the deploy.
+- `package.json` pins `engines.node` to `24.x` and has NO dependencies on purpose: `">=18"` let Vercel auto-upgrade to Node 26, and the `netlify-cli` devDependency then failed `npm install` (a transitive package needs `SlowBuffer`), which broke deploys. `netlify` commands run via `npx --package netlify-cli`. Don't add heavy devDependencies or loosen `engines`.
 
 ## Prices
 - The page refreshes held positions' prices from `/api/quotes` on load/refresh (`Tracker.applyQuotes`): a quote replaces a stored price only if it is NEWER than that price's `priceAt`, so a price typed more recently is never overwritten. Unknown tickers (not in `stocks.js`) get no quote and Today flags them stale.
