@@ -108,6 +108,9 @@ test('whole words only: Gamudaland is not Gamuda, but Gamuda Land and Gamuda\'s 
 test('look-alike companies are kept apart', () => {
   assert.ok(!rel('Genting Malaysia Posts Higher Profit', 'GENTING'));
   assert.ok(!rel('Genting Plantations Raises Dividend', 'GENTING'));
+  assert.ok(!rel('SG Movers for Thursday: Genting Sing Was the Top Gainer', 'GENTING'));          // Genting Singapore, abbreviated (seen live)
+  assert.ok(rel('Genting Loses Its Lustre', 'GENTING'));
+  assert.ok(rel('Genting Chairman Buys More Shares Amid as Stock Nears Two-decade Low', 'GENTING'));
   assert.ok(rel('Genting Cut to Sell From Buy by Maybank IB', 'GENTING'));
   assert.ok(rel('Genting Malaysia Posts Higher Profit', 'GENM'));
   assert.ok(!rel('IOI Properties Group Launches New Project', 'IOICORP'));
