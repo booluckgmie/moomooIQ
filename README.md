@@ -8,3 +8,6 @@ Educational only; not financial advice.
 1. Import the GitHub repo in Vercel (framework: Other; no build/install needed - `vercel.json` handles it).
 2. Add env vars `GEMINI_API_KEY` and `ACCESS_TOKEN` (any long random string) for Production and Preview.
 3. Deploy, then enter the access token in the Analyse tab. Portfolio data stays in your browser.
+
+## Connect your Moomoo account (read-only)
+See `docs/connect-moomoo.md`: OpenD + a small local bridge, then Portfolio > Import from Moomoo. Check your setup with `python3 bridge/check_setup.py`.

@@ -15,7 +15,11 @@ async function pool(jobs, n) {
 exports.handler = async (event) => {
   const json = (statusCode, body, cache) => ({ statusCode,
     headers: { 'content-type': 'application/json', ...(cache ? { 'cache-control': cache } : {}) }, body: JSON.stringify(body) });
-  const tickers = [...new Set(((event.queryStringParameters || {}).tickers || '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean))];
+  // "INARI" or, for a stock outside the built-in list, "OPPSTAR@0053" (ticker@bursa code)
+  const parsed = ((event.queryStringParameters || {}).tickers || '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean)
+    .map((s) => { const [t, c] = s.split('@'); return { t, code: /^[0-9A-Z]{1,6}$/.test(c || '') ? c : '' }; });
+  const codeOf = Object.fromEntries(parsed.map((x) => [x.t, x.code]));
+  const tickers = [...new Set(parsed.map((x) => x.t))];
   if (!tickers.length) return json(400, { error: 'tickers required' });
   if (tickers.length > MAX) return json(400, { error: `max ${MAX} tickers` });
   if (tickers.some((t) => !/^[A-Z0-9.&-]{1,20}$/.test(t))) return json(400, { error: 'invalid ticker' });
@@ -23,7 +27,7 @@ exports.handler = async (event) => {
   const universe = Object.fromEntries(flat().map((s) => [s.ticker, s]));
   const quotes = {}, failed = [], jobs = [];
   for (const t of tickers) {
-    const sym = P.symbolFor(universe[t]);
+    const sym = P.symbolFor(universe[t]) || (codeOf[t] ? P.symbolFor({ code: codeOf[t] }) : null);
     if (!sym) { failed.push({ ticker: t, reason: 'not in the stock list' }); continue; }
     jobs.push(async () => { try { return { t, c: await P.chart(sym, '5d') }; } catch (e) { e.t = t; throw e; } });
   }

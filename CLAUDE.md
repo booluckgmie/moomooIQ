@@ -10,7 +10,8 @@ Bursa Malaysia stock analysis SPA (Gemini) plus Claude Code skills for Moomoo Op
 - `lib/prices.js` (Yahoo Finance daily bars for Bursa as `<code>.KL`, delayed ~15 min, unofficial, 2 hosts + cache) and `lib/odds.js` (history replay of the 8% stop / +20% target, ATR%, 52-week range; pure maths). Endpoints `/api/quotes` (batch delayed prices) and `/api/odds` (one stock). Idea adapted from the third-party day-trader `trader-timemachine`, rewritten for daily Bursa bars; it is a guide, not a forecast (overlapping windows, one stock, one year).
 - `public/tracker.js` – pure portfolio rules engine (stops, ladder, trim, alerts, position sizing [2% risk default, 100-share lots, 1/3 slot cap, RM200 cash buffer], export/import JSON v1 with validation); tests in `tests/`. Positions live in the browser's localStorage only.
 - Pre-trade check: `preTradeCheck` in `tracker.js` (slots, RM200 cash buffer, 1/3 cap, 2% risk at the 8% stop, 100-lot, adding-to-loser, plus bad news / results week / ex-dividend from `Today.newsForCheck`). Advisory only: it never places or sends an order. Adapted from the `trader-risk` idea.
-- `bridge/opend_bridge.py` – local read-only HTTP bridge to OpenD (token-auth, allowlisted vendor scripts, no trading endpoints)
+- `bridge/opend_bridge.py` – local read-only HTTP bridge to OpenD (token-auth, allowlisted vendor scripts, no trading endpoints); `bridge/check_setup.py` – read-only self-check for the user's computer; `docs/connect-moomoo.md` – setup guide
+- `public/moomoo.js` – pure parser/merger for **Import from Moomoo** (Portfolio tab): bridge `/portfolio` answer -> tracker positions + preview. Read-only. Merge keeps the user's notes/cap size/trimmed/high-water; skips shorts, options and non-MY positions; free cash = cash - frozen (only offered if MYR); unknown stocks keep a cleaned name as ticker plus their code (`TICKER@CODE` for `/api/quotes`). Tickers must match `/^[A-Z0-9.&-]{1,20}$/` everywhere (a bad one 400s a whole batch).
 - **Usage** tab + `netlify/functions/analytics.js` (+ `api/analytics.js`) – Vercel Web Analytics aggregates (views, visitors, daily chart, top pages/countries/devices/referrers). Needs `VERCEL_ANALYTICS_TOKEN`; without it (or on Netlify) answers `{connected:false, reason}` and the tab shows setup copy instead of numbers. The tracking beacon (`/_vercel/insights/script.js`) is in `index.html`; it only resolves and reports on the Vercel deployment.
 - `.claude/skills/` – official Moomoo skills v2.1 (news-search, stock-digest, comment-sentiment, capital/derivatives/technical-anomaly), plus `moomooapi` and `install-moomoo-opend` (vendor files; re-download from https://www.moomoo.com/skills/moomoo-install.md to update)
 
@@ -35,7 +36,7 @@ Bursa Malaysia stock analysis SPA (Gemini) plus Claude Code skills for Moomoo Op
 
 ## Today page rules
 - Opportunities = watchlist names (not held) with positive recency-weighted headline momentum and no bad news in 7 days. It is a news signal only: no price/valuation data. Threshold is `MIN_OPP_SCORE` in `today.js`.
-- Stops are only checked against prices the user entered; positions carry `priceAt` and Today flags prices older than the last close.
+- Stops are checked against the last price on file (typed, Yahoo delayed quote, or imported from Moomoo); positions carry `priceAt`/`priceSrc` and Today flags prices older than the last close.
 - Relevance filter matters: Moomoo keyword search returns other companies' news (e.g. "Maybank" as a broker); extend `EXCLUDE`/`BROKERS`/`KEYWORD` in `lib/signals.js` when a ticker returns junk.
 - `/api/brief` request URLs contain watchlist and position tickers (no quantities or prices).
 

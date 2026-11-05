@@ -64,3 +64,12 @@ test('odds: validates input and unknown tickers', async () => {
   global.fetch = async () => reply(500, {});
   assert.strictEqual((await call({ ticker: 'GAMUDA' })).statusCode, 502);
 });
+
+test('quotes: a stock outside the built-in list can be priced by its Bursa code (TICKER@CODE); bad codes are not looked up', async () => {
+  const seen = []; global.fetch = async (u) => { seen.push(String(u)); return reply(200, fixture); };
+  const d = JSON.parse((await quotes.handler({ queryStringParameters: { tickers: 'oppstar@0053,GAMUDA@9999,BADCODE@../x' } })).body);
+  assert.ok(d.quotes.OPPSTAR && d.quotes.GAMUDA);
+  assert.ok(seen.some((u) => u.includes('0053.KL')));
+  assert.ok(seen.some((u) => u.includes('5398.KL')) && !seen.some((u) => u.includes('9999.KL')));   // the built-in list wins over a supplied code
+  assert.deepStrictEqual(d.failed, [{ ticker: 'BADCODE', reason: 'not in the stock list' }]);
+});

@@ -133,3 +133,11 @@ test('import drops a priceAt that is junk or has no price', () => {
   assert.strictEqual(parseImport(mk({ price: 2, priceAt: 'not a date' })).positions[0].priceAt, null);
   assert.strictEqual(parseImport(mk({ priceAt: '2026-10-13T09:10:00.000Z' })).positions[0].priceAt, null);
 });
+
+test('export/import keeps a Moomoo price marker and a valid stock code, and drops junk codes', () => {
+  const { exportState, parseImport } = require('../public/tracker');
+  const back = parseImport(exportState({ cash: '1', positions: [{ ticker: 'OPPSTAR', code: '0053', qty: 1, cost: 1, type: 'mid', high: 1, price: 2, priceAt: '2026-11-05T02:45:00.000Z', priceSrc: 'moomoo' }] }));
+  assert.deepStrictEqual([back.positions[0].priceSrc, back.positions[0].code], ['moomoo', '0053']);
+  const junk = parseImport(JSON.stringify({ app: 'moomooiq', version: 1, positions: [{ ticker: 'A', qty: 1, cost: 1, code: '../../x', priceSrc: 'evil', price: 2 }] }));
+  assert.ok(!('code' in junk.positions[0])); assert.strictEqual(junk.positions[0].priceSrc, null);
+});

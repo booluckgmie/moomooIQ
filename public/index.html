@@ -48,6 +48,9 @@ button.sm{padding:8px 12px;min-height:40px}
 .chip span{color:var(--mut)}.note{font-size:13px;color:var(--mut);margin:8px 2px}.banner{padding:10px 14px;border-radius:10px;background:var(--amb-bg);color:var(--amb);font-size:14px;margin-top:12px}
 details.card summary{cursor:pointer;font-weight:600}.wl{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
 .wl button{padding:6px 10px;min-height:36px;border-radius:999px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);font:inherit;cursor:pointer}
+/* Import preview */
+.pv h4{margin:0 0 6px;font-size:15px}.pv ul{margin:4px 0 10px;padding-left:18px}.pv li{margin:3px 0;overflow-wrap:anywhere}
+.pv select{padding:3px 6px;margin-left:6px}.pv label{display:block;margin:6px 0}.pv .row{margin-top:10px}
 /* Pre-trade check */
 .verdict{padding:10px 14px;border-radius:10px;font-weight:600;margin-bottom:6px}.verdict.PASS{background:var(--grn-bg);color:var(--grn)}.verdict.WARN{background:var(--amb-bg);color:var(--amb)}.verdict.BLOCK{background:var(--red-bg);color:var(--red)}
 .ck{display:flex;gap:10px;padding:5px 2px;font-size:14px;overflow-wrap:anywhere}.ck>span:first-child{flex:none;width:16px;text-align:center;font-weight:700}
@@ -131,13 +134,18 @@ details.card summary{cursor:pointer;font-weight:600}.wl{display:flex;flex-wrap:w
       <input id="cash" type="number" placeholder="Free cash RM" style="width:130px">
       <button class="go" id="pyahoo">Update prices (delayed)</button>
       <button class="go" id="pfetch">Fetch prices (bridge)</button>
-      <button class="go" id="pexp">Export</button>
-      <button class="go" id="pimp">Import</button>
+      <button class="go" id="pexp" title="Download your positions as a file">Export backup</button>
+      <button class="go" id="pimp" title="Restore positions from a backup file">Import backup</button>
       <input id="pfile" type="file" accept="application/json,.json" hidden>
       <input id="btok" type="password" placeholder="Bridge token" autocomplete="off" size="14">
     </div>
     <div class="small mut" id="pnote" style="margin:6px 0"></div>
-    <p class="mut">Bridge: <code>BRIDGE_TOKEN=… python3 bridge/opend_bridge.py</code> (OpenD running, localhost, read-only). Or type prices in manually.</p>
+    <div class="row" style="margin-top:4px">
+      <select id="ienv" aria-label="Which Moomoo account to read"><option value="SIMULATE">Paper account</option><option value="REAL">Real account (read-only)</option></select>
+      <button class="go" id="pimport">Import from Moomoo</button>
+    </div>
+    <div id="ipreview"></div>
+    <p class="small mut">Import and "Fetch prices (bridge)" read your Moomoo account through a small program on <b>your own computer</b>; this page never sees your Moomoo login. Check it with <code>python3 bridge/check_setup.py</code>, then run <code>BRIDGE_TOKEN=… BRIDGE_ALLOW_ORIGIN=&lt;this site's address&gt; python3 bridge/opend_bridge.py</code> (add <code>BRIDGE_ALLOW_REAL=1</code> to read your real account). Read-only: it cannot place orders. Chrome or Firefox only.</p>
   </div>
   <div class="card">
     <h3>Position sizing (8% stop)</h3>
@@ -167,6 +175,7 @@ details.card summary{cursor:pointer;font-weight:600}.wl{display:flex;flex-wrap:w
 </section>
 </main>
 <script src="/tracker.js"></script>
+<script src="/moomoo.js"></script>
 <script src="/md.js"></script>
 <script src="/today.js"></script>
 <script>
@@ -291,7 +300,7 @@ function renderTracker(){
     const pos=state.positions[i];
     const bad=/SELL/.test(r.action),good=/TRIM|target/.test(r.action);
     return `<tr><td><b>${esc(r.ticker)}</b><br><span class="mut">${r.qty} @ ${r.cost}</span></td>
-      <td><input data-i="${i}" data-f="price" type="number" step="0.001" value="${pos.price??''}" style="width:80px">${pos.priceSrc==='yahoo'?'<div class="small mut">delayed quote</div>':''}</td>
+      <td><input data-i="${i}" data-f="price" type="number" step="0.001" value="${pos.price??''}" style="width:80px">${pos.priceSrc==='yahoo'?'<div class="small mut">delayed quote</div>':pos.priceSrc==='moomoo'?'<div class="small mut">from Moomoo</div>':''}</td>
       <td>${pct(r.gain)}<br><span class="mut">${rm(r.pl)}</span></td>
       <td>${rm(r.stop)}<br><span class="mut">${esc(r.stopWhy)}</span></td>
       <td>${rm(r.target)}</td>
@@ -310,7 +319,7 @@ function renderTracker(){
 $('cash').value=state.cash;
 $('cash').oninput=e=>{state.cash=e.target.value;save();renderTracker()};
 $('padd').onclick=()=>{
-  const t=$('pt').value.trim().toUpperCase(),q=+$('pq').value,c=+$('pc').value;
+  const t=$('pt').value.trim().toUpperCase().replace(/[^A-Z0-9.&-]/g,''),q=+$('pq').value,c=+$('pc').value;
   if(!t||!(q>0)||!(c>0))return;
   state.positions.push({ticker:t,qty:q,cost:c,type:$('py').value,high:c});save();renderTracker();
   $('pt').value=$('pq').value=$('pc').value='';
@@ -368,6 +377,7 @@ try{$('sr').value=localStorage.getItem('moomooiq.risk')||'2'}catch(e){$('sr').va
 $('sr').oninput=()=>{try{localStorage.setItem('moomooiq.risk',$('sr').value)}catch(e){}renderSizing()};
 $('se').oninput=renderSizing;
 /* ---------- Today ---------- */
+const okTicker=t=>/^[A-Z0-9.&-]{1,20}$/.test(String(t));
 const loadJSON=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v??d}catch(e){return d}};
 const saveJSON=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
 const DEFAULT_WATCH=['GAMUDA','INARI','99SMART','SIME','NATGATE','YTLPOWR','MAYBANK','PCHEM'];
@@ -378,7 +388,7 @@ const nameOf=t=>(stocks.find(s=>s.ticker===t)||{}).name||'';
 const clock=d=>new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kuala_Lumpur'}).format(d);
 
 async function loadBrief(){
-  const tickers=[...new Set([...state.positions.map(p=>p.ticker),...watch])].slice(0,12);
+  const tickers=[...new Set([...state.positions.map(p=>p.ticker),...watch])].filter(okTicker).slice(0,12);
   if(!tickers.length){brief=null;briefState='ok';renderToday();return}
   briefState='loading';renderToday();
   try{
@@ -455,7 +465,8 @@ setInterval(()=>{if(!document.hidden)renderToday()},60e3);
 let pricesAt=0,priceNote='';
 // A fetched quote only replaces a stored price when it is newer than that price's timestamp (see Tracker.applyQuotes).
 async function refreshPrices(manual){
-  const tickers=[...new Set(state.positions.map(p=>p.ticker))].slice(0,12);
+  // stocks outside the built-in list carry their Bursa code ("TICKER@CODE") so they can still be priced
+  const tickers=[...new Set(state.positions.filter(p=>okTicker(p.ticker)).map(p=>p.code&&/^[0-9A-Za-z]{1,6}$/.test(p.code)?`${p.ticker}@${p.code}`:p.ticker))].slice(0,12);
   if(!tickers.length){priceNote='';$('pnote').textContent=manual?'Add a position first.':'';return}
   if(manual){$('pyahoo').disabled=true;$('pnote').textContent='Fetching delayed prices…'}
   try{
@@ -472,6 +483,55 @@ async function refreshPrices(manual){
 }
 $('pyahoo').onclick=()=>refreshPrices(true);
 loadBrief();refreshPrices();
+
+/* ---------- Import from Moomoo (read-only, through the bridge on the user's own computer) ---------- */
+let importPending=null;
+$('pimport').onclick=async()=>{
+  const env=$('ienv').value;
+  $('pimport').disabled=true;$('ipreview').innerHTML='<div class="mut"><span class="spin"></span> Asking Moomoo (read-only)…</div>';
+  try{
+    let r,d;
+    try{
+      r=await fetch(`http://127.0.0.1:8787/portfolio?market=MY&trd_env=${env}`,{headers:{Authorization:'Bearer '+$('btok').value}});
+      d=await r.json().catch(()=>({}));
+    }catch(e){throw new Error(MoomooImport.explainBridgeError(0,null,true))}
+    if(!r.ok)throw new Error(MoomooImport.explainBridgeError(r.status,d,false));
+    showImportPreview(MoomooImport.parseBrokerPortfolio(d,stocks),env);
+  }catch(e){$('ipreview').innerHTML=`<div class="errbox">${esc(e.message)}</div>`}
+  $('pimport').disabled=false;
+};
+function showImportPreview(parsed,env){
+  importPending={parsed,env};
+  const m=MoomooImport.mergeBrokerPositions(state.positions,parsed.positions,{nowMs:Date.now()});
+  const f=parsed.funds,myr=f&&(f.currency==='MYR'),cashDiffers=f&&Math.abs((+state.cash||0)-f.free)>0.005;
+  const cashOffer=f&&cashDiffers&&(myr||!f.currency||f.currency==='N/A');
+  let h=`<div class="card pv"><h4>Moomoo ${env==='REAL'?'real':'paper'} account: ${parsed.positions.length} Bursa position${parsed.positions.length===1?'':'s'}${f?`, cash ${f.currency||''} ${f.cash.toFixed(2)}`:''}</h4>`;
+  if(m.added.length)h+=`<b>New</b><ul>${m.added.map(a=>`<li><b>${esc(a.ticker)}</b> ${a.qty} @ ${a.cost}<label style="display:inline">&nbsp;cap size <select data-newtype="${esc(a.ticker)}"><option value="small">small (12%)</option><option value="mid" selected>mid (9%)</option><option value="large">large (7%)</option></select></label></li>`).join('')}</ul>`;
+  if(m.updated.length)h+=`<b>Updated</b><ul>${m.updated.map(u=>`<li><b>${esc(u.ticker)}</b> shares ${u.qtyFrom} → ${u.qtyTo}, cost ${u.costFrom} → ${u.costTo}</li>`).join('')}</ul>`;
+  if(m.unchanged.length)h+=`<p class="small mut">Already matching: ${m.unchanged.map(esc).join(', ')}</p>`;
+  if(m.missing.length)h+=`<p><b>Not in Moomoo:</b> ${m.missing.map(esc).join(', ')}<label><input type="checkbox" id="irm"> Remove these from my tracker (otherwise they are kept)</label></p>`;
+  if(parsed.skipped.length)h+=`<details><summary class="small mut">${parsed.skipped.length} skipped</summary><ul>${parsed.skipped.map(x=>`<li>${esc(x.name)} (${esc(x.code)}): ${esc(x.reason)}</li>`).join('')}</ul></details>`;
+  if(cashOffer)h+=`<label><input type="checkbox" id="icash" ${myr?'checked':''}> Set free cash to RM ${f.free.toFixed(2)} (cash ${f.cash.toFixed(2)}${f.frozen?` minus ${f.frozen.toFixed(2)} on hold`:''})${myr?'':' <span class="mut">(currency not reported, check it first)</span>'}</label>`;
+  else if(f&&f.currency&&!myr&&f.currency!=='N/A')h+=`<p class="small mut">Cash not imported: the account reports ${esc(f.currency)}, not MYR.</p>`;
+  const nothing=!m.added.length&&!m.updated.length&&!m.missing.length&&!cashOffer;
+  h+=nothing?'<p><b>Already up to date.</b> Nothing to change.</p><div class="row"><button class="go" id="icancel">Close</button></div>'
+    :'<div class="row"><button class="go" id="iapply">Apply</button><button class="go" id="icancel" style="background:var(--card);color:var(--fg);border:1px solid var(--bd)">Cancel</button></div>';
+  $('ipreview').innerHTML=h+'</div>';
+}
+$('ipreview').addEventListener('click',e=>{
+  if(e.target.id==='icancel'){importPending=null;$('ipreview').innerHTML='';return}
+  if(e.target.id!=='iapply'||!importPending)return;
+  const {parsed}=importPending,types={};
+  document.querySelectorAll('#ipreview [data-newtype]').forEach(sel=>{types[sel.dataset.newtype]=sel.value});
+  const res=MoomooImport.mergeBrokerPositions(state.positions,parsed.positions,{removeMissing:!!($('irm')&&$('irm').checked),nowMs:Date.now(),types});
+  state.positions=res.positions;
+  const cashOn=$('icash')&&$('icash').checked;
+  if(cashOn){state.cash=String(parsed.funds.free);$('cash').value=state.cash}
+  save();importPending=null;
+  const bits=[res.added.length&&`${res.added.length} added`,res.updated.length&&`${res.updated.length} updated`,res.removed.length&&`${res.removed.length} removed`,cashOn&&'cash set'].filter(Boolean);
+  $('ipreview').innerHTML=`<div class="card pv"><b>Imported from Moomoo:</b> ${bits.join(', ')||'no changes'}. Check each position's plan and cap size in the table below.</div>`;
+  renderTracker();
+});
 
 /* ---------- Pre-trade check ---------- */
 function fillCheckList(){$('ctl').innerHTML=stocks.map(s=>`<option value="${esc(s.ticker)}">${esc(s.name)}</option>`).join('')}

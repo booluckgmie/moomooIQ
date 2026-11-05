@@ -4,3 +4,6 @@ node_modules/
 *.log
 .DS_Store
 moomooiq-positions-*.json
+
+__pycache__/
+*.pyc

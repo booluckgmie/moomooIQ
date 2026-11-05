@@ -97,18 +97,21 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "MoomooIQBridge/0.1"
 
     def _send(self, status, body):
-        raw = json.dumps(body, ensure_ascii=False).encode()
+        raw = b"" if status == 204 else json.dumps(body, ensure_ascii=False).encode()   # 204 must not carry a body
         self.send_response(status)
-        self.send_header("content-type", "application/json; charset=utf-8")
+        if raw:
+            self.send_header("content-type", "application/json; charset=utf-8")
         self.send_header("content-length", str(len(raw)))
+        self.send_header("vary", "Origin")
         origin = os.environ.get("BRIDGE_ALLOW_ORIGIN")
         if origin and self.headers.get("Origin") == origin:
             self.send_header("access-control-allow-origin", origin)
             self.send_header("access-control-allow-headers", "authorization")
             self.send_header("access-control-allow-private-network", "true")
-            self.send_header("vary", "Origin")
+            self.send_header("access-control-max-age", "600")
         self.end_headers()
-        self.wfile.write(raw)
+        if raw:
+            self.wfile.write(raw)
 
     def do_OPTIONS(self):
         self._send(204, {})

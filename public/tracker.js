@@ -210,8 +210,9 @@
       return { ticker, qty, cost, type: TYPES.includes(p.type) ? p.type : 'mid',
         high: Math.max(cost, num(p.high) || 0, price || 0), price: price > 0 ? price : null,
         priceAt: price > 0 && typeof p.priceAt === 'string' && !Number.isNaN(Date.parse(p.priceAt)) ? p.priceAt : null,
-        priceSrc: price > 0 && p.priceSrc === 'yahoo' ? 'yahoo' : null,
-        trimmed: p.trimmed === true, plan: typeof p.plan === 'string' ? p.plan.slice(0, 500) : '' };
+        priceSrc: price > 0 && ['yahoo', 'moomoo'].includes(p.priceSrc) ? p.priceSrc : null,
+        trimmed: p.trimmed === true, plan: typeof p.plan === 'string' ? p.plan.slice(0, 500) : '',
+        ...(/^[0-9A-Za-z]{1,6}$/.test(String(p.code || '')) ? { code: String(p.code).toUpperCase() } : {}) };
     });
     const cash = num(d.cash);
     return { positions, cash: cash == null ? '' : String(cash) };
