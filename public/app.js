@@ -1,15 +1,38 @@
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let stocks=[];
+const lsGet=(k,d)=>{try{const v=localStorage.getItem(k);return v==null?d:v}catch(e){return d}};
+const lsSet=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
 function show(tab){
   document.querySelectorAll('nav button,main section').forEach(e=>e.classList.remove('on'));
   document.querySelector(`nav button[data-tab="${tab}"]`).classList.add('on');$(tab).classList.add('on');window.scrollTo(0,0);
 }
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>show(b.dataset.tab));
+/* Opens a card inside More (or a tool in Portfolio) from anywhere, e.g. data-open="daccess" */
+function openCard(id){
+  const d=$(id);if(!d)return;
+  show(d.closest('section').id);d.open=true;
+  setTimeout(()=>d.scrollIntoView({behavior:'smooth',block:'start'}),50);
+}
+document.addEventListener('click',e=>{const o=e.target.closest('[data-open]');if(o)openCard(o.dataset.open)});
 let usageLoaded=false;
-document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
-  show(b.dataset.tab);
-  if(b.dataset.tab==='usage'&&!usageLoaded){usageLoaded=true;loadUsage()}
-});
+$('dusage').addEventListener('toggle',()=>{if($('dusage').open&&!usageLoaded){usageLoaded=true;loadUsage()}});
+
+/* ---------- Experience level: same data, different wording ---------- */
+const LEVELS={
+  beginner:{badge:'🌱 New',desc:'Plain words, short explanations, and fewer numbers. Technical detail is tucked away.'},
+  regular:{badge:'📈 Some experience',desc:'Balanced: the key numbers with a one-line reason for each.'},
+  pro:{badge:'🧠 Experienced',desc:'Compact and numeric: scores, equity, no hand-holding.'}};
+let level=LEVELS[lsGet('moomooiq.level','regular')]?lsGet('moomooiq.level','regular'):'regular';
+function setLevel(l,rerender=true){
+  if(!LEVELS[l])return;level=l;lsSet('moomooiq.level',l);
+  document.body.dataset.level=l;
+  $('lvlbadge').textContent=LEVELS[l].badge;$('lvldesc').textContent=LEVELS[l].desc;
+  document.querySelectorAll('#lvlseg button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.level===l)));
+  if(rerender&&typeof renderToday==='function'){renderToday();renderTracker()}
+}
+document.querySelectorAll('#lvlseg button').forEach(b=>b.onclick=()=>setLevel(b.dataset.level));
+const BEG=()=>level==='beginner',PRO=()=>level==='pro';
 function fillTickers(){
   const sec=$('sector').value;
   $('ticker').innerHTML=stocks.filter(s=>!sec||s.sector===sec)
@@ -38,7 +61,7 @@ async function runSection(k,my=job){
     el.innerHTML=`<h3>${SECTIONS[k]}</h3><div class="md">${Md.render(d.text)}</div><div class="small mut" style="margin-top:8px">${esc(d.model)}${d.headlines?` · ${d.headlines} recent headlines used`:''}${d.priceSource==='market'?` · price RM${d.price} (delayed quote)`:''}</div>`;
   }catch(e){
     if(my!==job)return;
-    el.innerHTML=`<h3>${SECTIONS[k]}</h3><div class="errbox">${esc(e.message)}${/token/i.test(e.message)?' Re-enter it above; it is saved after you type it.':''}</div><button class="go sm" data-retry="${k}">Retry this section</button>`;
+    el.innerHTML=`<h3>${SECTIONS[k]}</h3><div class="errbox">${esc(e.message)}${/token|access code/i.test(e.message)?' <button class="linkbtn" data-open="daccess">Enter your access code</button>':''}</div><button class="go sm" data-retry="${k}">Retry this section</button>`;
   }
   if(--my.pending<=0)$('run').disabled=false;
 }
@@ -112,7 +135,8 @@ let state={positions:[],cash:''};
 try{state=Object.assign(state,JSON.parse(localStorage.getItem(KEY)||'{}'))}catch(e){}
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}};
 const pct=n=>n==null?'–':(n*100).toFixed(1)+'%';
-const rm=n=>n==null?'–':'RM'+n.toFixed(2);
+const rm=n=>n==null?'–':(n<0?'-':'')+'RM'+Math.abs(n).toFixed(2);
+const srm=n=>n==null?'–':(n>0?'+':'')+rm(n);
 function renderTracker(){
   const p=Tracker.portfolio(state.positions,state.cash);
   const rows=p.rows.map((r,i)=>{
@@ -127,16 +151,22 @@ function renderTracker(){
       <td><input data-i="${i}" data-f="plan" placeholder="plan if −10%" value="${esc(pos.plan||'')}" size="12">
           <label class="mut"><input data-i="${i}" data-f="trimmed" type="checkbox" ${pos.trimmed?'checked':''}> trimmed</label>
           <button data-del="${i}" class="go" style="padding:2px 8px">✕</button></td></tr>`}).join('');
+  const eq=Tracker.equityOf(state.positions,state.cash);
+  $('psum').innerHTML=`<div><div class="tl">Invested</div><div class="tv">${rm(p.invested)}</div></div>
+    <div><div class="tl">${BEG()?'Gain / loss':'P/L'}</div><div class="tv ${p.pl>0?'pos':p.pl<0?'neg':''}">${state.positions.length?srm(p.pl):'–'}</div></div>
+    <div><div class="tl">${PRO()?'Equity':'Stocks held'}</div><div class="tv">${PRO()?rm(eq):state.positions.length+' / 3'}</div></div>`;
+  if(!state.positions.length&&!$('dadd').dataset.touched)$('dadd').open=true;
   $('pout').innerHTML=(p.alerts.length?`<div class="card" style="border-color:#d6336c">${p.alerts.map(a=>'⚠ '+esc(a)).join('<br>')}</div>`:'')
    +(rows?`<div class="card" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:14px">
-     <tr class="mut" style="text-align:left"><th>Position</th><th>Price</th><th>P/L</th><th>Stop</th><th>Target</th><th>Action</th><th>Notes</th></tr>${rows}</table>
-     <p>Invested ${rm(p.invested)} · P/L ${rm(p.pl)} (${pct(p.plPct)})</p></div>`:'<div class="card mut">No positions. Add one above - set the stop the same day you buy.</div>')
+     <tr class="mut" style="text-align:left"><th>Position</th><th>Price</th><th>P/L</th><th>${BEG()?'Safety exit':'Stop'}</th><th>Target</th><th>Action</th><th>Notes</th></tr>${rows}</table>
+     <p class="small mut">Total P/L ${rm(p.pl)} (${pct(p.plPct)})</p></div>`:'<div class="card mut">No stocks yet. Open <b>➕ Add a stock I own</b> below, or sync from Moomoo. Set the safety exit the same day you buy.</div>')
    +'<div class="mut">Educational only; not financial advice. Remember to place the actual trailing stop order in your broker.</div>';
   renderSizing();
   renderToday();
 }
 $('cash').value=state.cash;
 $('cash').oninput=e=>{state.cash=e.target.value;save();renderTracker()};
+$('dadd').addEventListener('toggle',()=>{$('dadd').dataset.touched='1'});
 $('padd').onclick=()=>{
   const t=$('pt').value.trim().toUpperCase().replace(/[^A-Z0-9.&-]/g,''),q=+$('pq').value,c=+$('pc').value;
   if(!t||!(q>0)||!(c>0))return;
@@ -219,46 +249,93 @@ async function loadBrief(){
 }
 
 function itemRow(it){
-  const inner=`<span class="dot ${it.tone}"></span><span class="rt"><b>${esc(it.title)}${it.isNew?' <span class="new">NEW</span>':''}</b><span class="sub">${esc(it.sub||'')}</span></span>`;
+  const subtxt=BEG()&&it.plain?it.plain:(it.sub||'');
+  const inner=`<span class="dot ${it.tone}"></span><span class="rt"><b>${esc(it.title)}${it.isNew?' <span class="new">NEW</span>':''}</b><span class="sub${BEG()&&it.plain?' plain':''}">${esc(subtxt)}</span></span>`;
   return it.url?`<a class="item" href="${esc(it.url)}" target="_blank" rel="noopener noreferrer">${inner}</a>`
     :`<button class="item" data-go="${esc(it.go||'portfolio')}">${inner}</button>`;
 }
-function tier(label,n){return `<div class="tier"><h2>${label}</h2>${n?`<span class="n">${n}</span>`:''}</div>`}
+function tier(emoji,label,sub,n){
+  return `<div class="tier"><div><h2>${emoji} ${label}</h2>${sub&&!PRO()?`<div class="tsub">${sub}</div>`:''}</div>${n?`<span class="n">${n}</span>`:''}</div>`;
+}
+const dots3=n=>`<span class="dots3" aria-hidden="true">${[0,1,2].map(i=>`<span class="${i<n?'f':''}"></span>`).join('')}</span>`;
+let firstDraw=true;
+
+function welcomeCard(){
+  return `<div class="card welcome"><h3>👋 Welcome to MoomooIQ</h3>
+    <p class="mut" style="margin:4px 0 0">One quick question so the page speaks your language. You can change it any time in ⚙️ More.</p>
+    <div class="lvlbtns">
+      <button class="lvlbtn" data-lvl="beginner"><b>🌱 I'm new to investing</b><span>Plain words and simple explanations</span></button>
+      <button class="lvlbtn" data-lvl="regular"><b>📈 I know the basics</b><span>Key numbers with short reasons</span></button>
+      <button class="lvlbtn" data-lvl="pro"><b>🧠 I'm experienced</b><span>Compact, numeric, no hand-holding</span></button>
+    </div></div>`;
+}
 
 function renderToday(){
-  const now=new Date(),ms=Today.marketStatus(now),nc=Today.nextCheck(now);
+  const now=new Date(),ms=Today.marketStatus(now),nc=Today.nextCheck(now),gr=Today.greeting(now),dp=Today.dayProgress(now);
+  $('tgreet').textContent=`${gr.emoji} ${gr.text}`;
   $('tdate').textContent=new Intl.DateTimeFormat('en-GB',{weekday:'long',day:'numeric',month:'long',timeZone:'Asia/Kuala_Lumpur'}).format(now);
-  $('tmkt').className='pill '+ms.state;$('tmkt').textContent=`${ms.label} · ${ms.detail}`;
+  $('tlive').className='live '+ms.state;
+  $('tmkt').textContent=`Bursa ${ms.label.toLowerCase()} · ${ms.detail}`;
+  $('tlunch').style.left=dp.lunch.from+'%';$('tlunch').style.width=(dp.lunch.to-dp.lunch.from)+'%';
+  $('tfill').style.width=dp.pct+'%';$('tnow').style.left=dp.pct+'%';$('tnow').style.display=dp.phase==='weekend'?'none':'block';
   $('tnext').textContent=`Next look: ${nc.at}${nc.when==='today'?'':' '+nc.when} · ${nc.why}`;
+
+  const welcomed=lsGet('moomooiq.welcomed','')||state.positions.length;
+  $('twelcome').innerHTML=welcomed?'':welcomeCard();
 
   const p=Tracker.portfolio(state.positions,state.cash);
   const t=Today.buildToday({now,brief,positions:state.positions,portfolio:p,watch,sinceVisit:visit.since});
+  const sm=t.summary;
   let h='';
-  if(briefState==='error')h+=`<div class="banner">News unavailable right now. Showing your own rules only. <button class="go sm" id="tretry" style="margin-left:6px">Retry</button></div>`;
+  if(briefState==='error')h+=`<div class="banner">News is unavailable right now, so this page is using only your own rules. <button class="go sm" id="tretry" style="margin-left:6px">Retry</button></div>`;
 
-  h+=tier('Needs action',t.attention.length)+(t.attention.length
+  // three stat tiles
+  const plTile=!sm.slotsUsed?`<div class="tv">＋</div><div class="tl">Add your first stock</div>`
+    :!sm.allPriced?`<div class="tv">…</div><div class="tl">Prices needed</div>`
+    :`<div class="tv ${sm.pl>0?'pos':sm.pl<0?'neg':''}">${srm(sm.pl)}</div><div class="tl">${BEG()?'Gain or loss so far':'Open P/L'}${PRO()&&sm.plPct!=null?' · '+pct(sm.plPct):''}</div>`;
+  h+=`<div class="tiles">
+    <button class="tile" data-go="portfolio"><div class="ti">🎯</div><div class="tv">${dots3(sm.slotsUsed)}</div><div class="tl">${sm.slotsUsed} of ${sm.maxPositions} ${BEG()?'stock slots used':'slots used'}</div></button>
+    <button class="tile" data-go="portfolio"><div class="ti">💰</div>${plTile}</button>
+    <button class="tile ${sm.needsYou?'alertish':'okish'}" data-jump="tneeds"><div class="ti">${sm.needsYou?'🚨':'✅'}</div><div class="tv">${sm.needsYou?sm.needsYou:'All clear'}</div><div class="tl">${sm.needsYou?(BEG()?'things need you':'need action'):(BEG()?'nothing to do':'nothing urgent')}</div></button></div>`;
+
+  // do now
+  h+=`<div id="tneeds"></div>`+tier('🚨','Do now',BEG()?'These matter most. Start at the top.':'Your rules and bad news on stocks you own',t.attention.length);
+  h+=t.attention.length
     ?`<div class="box alert">${t.attention.map(itemRow).join('')}</div>`
-    :'<div class="box calm">✓ Nothing needs action today.</div>');
+    :`<div class="box calm"><span class="ci">☕</span><div><b>All calm. Nothing needs you right now.</b><div class="sub">${BEG()?'Your stocks are within your plan. You can relax.':'Stops, ladder and news are all inside your rules.'}</div></div></div>`;
 
-  h+=tier('Best opportunities');
-  if(briefState==='loading'&&!brief)h+='<div class="box"><div class="item"><span class="sub">Reading the latest headlines…</span></div></div>';
+  // ideas
+  h+=tier('💡','Ideas worth a look',BEG()?'Stocks you follow with good recent news. A reason to look closer, not to buy.':'Watchlist names with positive recent headlines');
+  if(briefState==='loading'&&!brief)h+='<div class="box"><div class="item"><span class="sub"><span class="spin"></span> Reading the latest headlines…</span></div></div>';
   else if(t.opportunities.length){
     h+='<div class="box">'+t.opportunities.map((o,i)=>`<div class="opp"><div class="rk">${i+1}</div><div class="ob">
-      <div class="oh"><b class="tk">${esc(o.ticker)}</b><span class="nm">${esc(nameOf(o.ticker))}</span><span class="sig" title="Headline momentum">${'●'.repeat(o.dots)}${'○'.repeat(3-o.dots)}</span></div>
+      <div class="oh"><b class="tk">${esc(o.ticker)}</b><span class="nm">${esc(nameOf(o.ticker))}</span>${PRO()?`<span class="sig" title="Headline momentum">${'●'.repeat(o.dots)}${'○'.repeat(3-o.dots)}</span>`:`<span class="sig" title="How good the recent news looks">${'★'.repeat(o.dots)}${'☆'.repeat(3-o.dots)}</span>`}</div>
       ${o.url?`<a class="hl" href="${esc(o.url)}" target="_blank" rel="noopener noreferrer">${esc(o.title)}</a>`:`<span class="hl">${esc(o.title)}</span>`}
-      <div class="sub">${esc(o.sub)}${o.isNew?' · <span class="new">NEW</span>':''}</div></div>
-      <div class="obtn"><button class="go sm" data-an="${esc(o.ticker)}">Analyse</button><button class="go sm alt" data-ck="${esc(o.ticker)}">Check buy</button></div></div>`).join('')+'</div>';
-    h+=`<p class="note">${t.slotsFull?'All 3 slots are used, so these are for watching only. ':''}Ranked by recent headlines only, not price or valuation. Run Analyse and check your rules before buying.</p>`;
-  }else h+=`<div class="box"><div class="item"><span class="rt"><b>No standout setup today</b><span class="sub">Quiet is fine. One good stock beats five average ones.</span></span></div></div>`;
+      <div class="sub">${esc(BEG()&&o.plain?o.plain:o.sub)}${o.isNew?' · <span class="new">NEW</span>':''}</div></div>
+      <div class="obtn"><button class="go sm" data-an="${esc(o.ticker)}">${BEG()?'Research it':'Analyse'}</button><button class="go sm alt" data-ck="${esc(o.ticker)}">${BEG()?'OK to buy?':'Check buy'}</button></div></div>`).join('')+'</div>';
+    h+=`<p class="note">${t.slotsFull?'All 3 slots are used, so these are for watching only. ':''}${BEG()?'Based on news headlines only, not the price. Research it and check your rules before buying.':'Ranked by recent headlines only, not price or valuation. Run Analyse and check your rules before buying.'}</p>`;
+  }else h+=`<div class="box"><div class="item"><span class="rt"><b>🌤️ No standout idea today</b><span class="sub">Quiet is fine. One good stock beats five average ones.</span></span></div></div>`;
 
-  if(t.headsUp.length)h+=tier('Heads-up')+`<div class="box">${t.headsUp.map(itemRow).join('')}</div>`;
+  // good to know
+  if(t.headsUp.length)h+=tier('👀','Good to know',BEG()?'Not urgent, but worth knowing about.':'Dividends, results, upgrades, stocks to avoid')+`<div class="box">${t.headsUp.map(itemRow).join('')}</div>`;
 
-  h+=tier('Your positions');
-  h+=t.chips.length?'<div class="chips">'+t.chips.map(c=>`<button class="chip ${c.state}" data-go="portfolio"><b>${esc(c.ticker)}</b> ${c.gain==null?'no price':pct(c.gain)} <span>stop ${rm(c.stop)}${c.room!=null?(c.room<=0?' · hit':` · ${(c.room*100).toFixed(0)}% away`):''}</span></button>`).join('')+'</div>'
-    :'<p class="note">No positions yet. Add them in Portfolio and this page will watch your stops.</p>';
+  // your stocks
+  h+=tier('💼','Your stocks',BEG()?'The bar shows how far each stock is between your safety exit (left) and your profit target (right).':'Stop → target');
+  if(t.chips.length){
+    h+='<div class="pcards">'+t.chips.map(c=>{
+      const lab={sell:'Sell now',trim:'Trim half',ok:'On track',noprice:'Add price'}[c.state];
+      const pin=c.gauge==null?'':`<div class="gauge" aria-hidden="true"><div class="pin" style="left:${Math.round(c.gauge*100)}%"></div></div>
+        <div class="glabels"><span>${BEG()?'Safety exit':'Stop'} ${rm(c.stop)}</span>${c.room!=null&&c.room>0?`<span>${(c.room*100).toFixed(0)}% away</span>`:''}<span>Target ${rm(c.target)}</span></div>`;
+      return `<button class="pcard ${c.state}" data-go="portfolio"><div class="ph"><span class="tk">${esc(c.ticker)}</span><span class="badge ${c.state}">${lab}</span></div>
+        <div class="pg">${c.gain==null?'<span class="mut">No price yet. Tap to add one.</span>':`<span class="pgain ${c.gain>0?'pos':c.gain<0?'neg':''}">${c.gain>=0?'+':''}${pct(c.gain)}</span> <span class="mut">${BEG()?'since you bought':''}${PRO()&&c.price!=null?' · '+rm(c.price):''}</span>`}</div>${pin}</button>`}).join('')+'</div>';
+  }else h+=`<div class="box"><div class="item"><span class="rt"><b>No stocks added yet</b><span class="sub">Add what you own in 💼 Portfolio and this page will watch your safety exits for you.</span></span></div></div>`;
 
-  h+=`<p class="note" style="margin-top:20px">${briefAt?`Headlines from Moomoo, updated ${clock(new Date(briefAt))} MYT. `:''}${pricesAt?`Prices from Yahoo Finance (delayed), checked ${clock(new Date(pricesAt))} MYT. `:''}${/unavailable/.test(priceNote)?esc(priceNote)+' ':''}Market hours ignore public holidays. Educational only, not financial advice.</p>`;
-  $('tbody').innerHTML=h;
+  if(!PRO())h+=`<div class="tipcard"><span class="ti">💡</span><div><b>Tip of the day</b><span class="sub">${esc(Today.tipOfDay(now))}</span></div></div>`;
+
+  h+=`<p class="foot">${briefAt?`News from Moomoo, updated ${clock(new Date(briefAt))}. `:''}${pricesAt?`Prices from Yahoo (about 15 min late), checked ${clock(new Date(pricesAt))}. `:''}${/unavailable/.test(priceNote)?esc(priceNote)+' ':''}Educational only, not financial advice. <button class="linkbtn" data-open="dhow">How this works</button></p>`;
+  const box=$('tbody');
+  box.classList.toggle('anim',firstDraw);firstDraw=false;
+  box.innerHTML=h;
 }
 
 function renderWatch(){
@@ -270,10 +347,16 @@ function setWatch(next){watch=next;saveJSON('moomooiq.watch',watch);renderWatch(
 $('wlbtn').onclick=()=>{const v=$('wladd').value;if(v&&watch.length<8)setWatch([...watch,v])};
 $('wlchips').onclick=e=>{const t=e.target.dataset.rm;if(t)setWatch(watch.filter(x=>x!==t))};
 $('trefresh').onclick=()=>{loadBrief();refreshPrices()};
+$('twelcome').addEventListener('click',e=>{
+  const b=e.target.closest('[data-lvl]');if(!b)return;
+  lsSet('moomooiq.welcomed','1');setLevel(b.dataset.lvl);
+});
 $('tbody').addEventListener('click',e=>{
   if(e.target.id==='tretry')return loadBrief();
+  const jump=e.target.closest('[data-jump]');
+  if(jump){const el=$(jump.dataset.jump);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});return}
   const go=e.target.closest('[data-go]'),an=e.target.closest('[data-an]'),ck=e.target.closest('[data-ck]');
-  if(ck){show('portfolio');$('ct').value=ck.dataset.ck;$('cout').innerHTML='';$('cq').focus();}
+  if(ck){show('portfolio');$('dcheck').open=true;$('ct').value=ck.dataset.ck;$('cout').innerHTML='';$('cq').focus();}
   else if(an){
     show('analyse');$('sector').value='';fillTickers();$('ticker').value=an.dataset.an;window.scrollTo(0,0);
   }else if(go)show(go.dataset.go);
@@ -379,10 +462,14 @@ $('cgo').onclick=async()=>{
   const [news,market]=await Promise.all([newsForCheck(t),marketForCheck(t)]);
   if(market&&market.price>0&&!+$('cp').value)$('cp').value=market.price;
   const r=Tracker.preTradeCheck({ticker:t,qty:+$('cq').value,price:+$('cp').value,positions:state.positions,cash:state.cash,riskPct:(+$('sr').value||2)/100,news,market});
-  $('cout').innerHTML=`<div class="verdict ${r.verdict}">${r.verdict}: ${CK_TEXT[r.verdict]}</div>`
-    +r.checks.map(c=>`<div class="ck ${c.level}"><span>${CK_ICON[c.level]}</span><span>${esc(c.text)}</span></div>`).join('')
+  const BEGV={PASS:'Looks fine against your rules',WARN:'Think twice: read the warnings',BLOCK:'Not yet: this breaks one of your rules'};
+  const line=c=>`<div class="ck ${c.level}"><span>${CK_ICON[c.level]}</span><span>${esc(c.text)}</span></div>`;
+  const main=r.checks.filter(c=>c.level!=='info'),infos=r.checks.filter(c=>c.level==='info');
+  $('cout').innerHTML=`<div class="verdict ${r.verdict}">${BEG()?BEGV[r.verdict]:r.verdict+': '+CK_TEXT[r.verdict]}</div>`
+    +(BEG()&&infos.length?main.map(line).join('')+`<details><summary class="small mut">More details</summary>${infos.map(line).join('')}</details>`:r.checks.map(line).join(''))
     +'<p class="note">A rules check, not a recommendation. A PASS never means "buy".</p>';
   $('cgo').disabled=false;
 };
 
 renderTracker();
+setLevel(level,false);renderToday();

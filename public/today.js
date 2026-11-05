@@ -86,6 +86,51 @@
     return { bad: bad ? { title: bad.title, daysAgo: days(bad.published) } : null, results: res ? { daysAgo: days(res.published) } : null, exDiv };
   }
 
+  // Friendly time-of-day greeting in Malaysia time.
+  function greeting(now) {
+    const h = Math.floor(myt(now).mins / 60);
+    if (h < 5) return { text: 'Still up?', emoji: '🌙' };
+    if (h < 12) return { text: 'Good morning', emoji: '☀️' };
+    if (h < 17) return { text: 'Good afternoon', emoji: '🌤️' };
+    return { text: 'Good evening', emoji: '🌙' };
+  }
+
+  // Where "now" sits on the Bursa day, 09:00 to 17:00, with the 12:30-14:30 lunch break marked.
+  function dayProgress(now) {
+    const { dow, mins } = myt(now), START = 540, END = 1020, SPAN = END - START;
+    const at = (m) => Math.round(((m - START) / SPAN) * 10000) / 100;
+    const base = { lunch: { from: at(750), to: at(870) } };
+    if (dow === 0 || dow === 6) return { ...base, pct: 0, phase: 'weekend' };
+    if (mins < START) return { ...base, pct: 0, phase: 'before' };
+    if (mins >= END) return { ...base, pct: 100, phase: 'after' };
+    return { ...base, pct: at(mins), phase: mins >= 750 && mins < 870 ? 'break' : 'open' };
+  }
+
+  const TIPS = [
+    'A stop-loss is an exit you decide in advance. Set it the day you buy, before emotions get involved.',
+    'Spreading money across stocks protects you from one bad surprise. This app suggests no more than 3 at a time.',
+    'Keep a little cash spare (RM200 or more). It stops you being forced to sell at a bad moment.',
+    'A stock that falls 8% needs a gain of about 8.7% to get back. Small losses are easy to fix; big ones are not.',
+    'On ex-dividend day the price usually drops by about the dividend. That is normal, not bad news.',
+    'A headline is a reason to look closer, not a reason to buy.',
+    'Delayed quotes are about 15 minutes behind. Fine for planning, not for split-second decisions.',
+    'Prices can move sharply after a company reports results. Many people trade smaller that week.',
+    'Write your plan before you buy: where you would sell if you are wrong, and where you would take profit.',
+    'Past price moves do not promise the future. The reality check shows how a stock behaved, not what it will do.',
+    'Buying more of a falling stock (averaging down) can turn a small mistake into a big one.',
+    'The best trade today may be no trade. Quiet days are fine.',
+  ];
+  const tipOfDay = (now) => TIPS[Math.floor(myt(now).dayMs / D) % TIPS.length];
+
+  // 0 = at or below the stop, 1 = at or past the target. A trailing stop that has climbed above the target still reads
+  // sensibly: above the stop means "full", at or below it means "empty".
+  function gauge(price, stop, target) {
+    if (!(price > 0)) return null;
+    if (price <= stop) return 0;
+    if (price >= target) return 1;
+    return (price - stop) / (target - stop);
+  }
+
   const money = (n) => `RM${Number(n).toFixed(2)}`;
 
   function buildToday({ now, brief, positions = [], portfolio, watch = [], maxPositions = 3, sinceVisit = null }) {
@@ -98,24 +143,31 @@
     if (portfolio) {
       portfolio.rows.forEach((r) => {
         if (/SELL/.test(r.action)) attention.push({ sev: 3, tone: 'bad', ticker: r.ticker, go: 'portfolio',
-          title: `Stop hit: sell ${r.ticker}`, sub: `${money(r.price)} is at or below your stop ${money(r.stop)} (${r.stopWhy})` });
+          title: `Stop hit: sell ${r.ticker}`, sub: `${money(r.price)} is at or below your stop ${money(r.stop)} (${r.stopWhy})`,
+          plain: `${r.ticker} has fallen to your safety exit price (${money(r.stop)}). Your plan says to sell now, so a small loss does not turn into a big one.` });
         else if (/TRIM/.test(r.action)) attention.push({ sev: 2, tone: 'good', ticker: r.ticker, go: 'portfolio',
-          title: `Trim half of ${r.ticker}`, sub: 'It reached +30%: take 50% off and let the rest run with the stop' });
+          title: `Trim half of ${r.ticker}`, sub: 'It reached +30%: take 50% off and let the rest run with the stop',
+          plain: `${r.ticker} is up 30% or more. Selling half locks in some profit, and the other half can keep growing.` });
       });
       portfolio.alerts.forEach((a) => {
         const m = /^([A-Z0-9&.-]+): (.*)$/.exec(a);
-        attention.push({ sev: m ? 2 : 1, tone: 'bad', ticker: m ? m[1] : '', go: 'portfolio', title: a, sub: m ? 'Your portfolio rule' : 'Portfolio rule' });
+        const plain = /positions held; max is/.test(a) ? 'Holding more than 3 stocks makes them hard to watch properly. Consider closing the weakest one.'
+          : /buffer/.test(a) ? 'You have very little spare cash. A small cushion means you are never forced to sell at a bad moment.'
+          : /no written plan/.test(a) ? `${m ? m[1] : 'This stock'} is down more than 10% and you have not written down what you will do. Decide calmly now, not in a panic later.` : undefined;
+        attention.push({ sev: m ? 2 : 1, tone: 'bad', ticker: m ? m[1] : '', go: 'portfolio', title: a, sub: m ? 'Your portfolio rule' : 'Portfolio rule', plain });
       });
       const stale = positions.filter((p) => !(Number(p.price) > 0) || !priceIsFresh(p.priceAt, now)).map((p) => p.ticker);
       if (stale.length) attention.push({ sev: 2, tone: 'bad', ticker: '', go: 'portfolio',
-        title: `Update prices: ${stale.join(', ')}`, sub: 'Stops are checked against the last price on file, and these have no recent price. Update them in Portfolio.' });
+        title: `Update prices: ${stale.join(', ')}`, sub: 'Stops are checked against the last price on file, and these have no recent price. Update them in Portfolio.',
+        plain: 'The prices saved for these stocks are old, so the safety checks cannot be trusted. Tap to update them.' });
     }
 
     // 2. Bad news on what you hold
     held.forEach((t) => {
       const a = analyse(feed[t], now);
       if (a.bad.length) attention.push({ sev: 2, tone: 'bad', ticker: t, url: a.bad[0].url, published: a.bad[0].published,
-        title: a.bad[0].title, sub: `${t} · bad news ${timeAgo(a.bad[0].published, now)}`, isNew: isNew(a.bad[0].published) });
+        title: a.bad[0].title, sub: `${t} · bad news ${timeAgo(a.bad[0].published, now)}`, isNew: isNew(a.bad[0].published),
+        plain: `There is bad news about ${t} from the last week. Read it, then decide whether your plan still makes sense.` });
     });
 
     // 3. Best opportunities: watchlist names (not already held) with positive, uncontested headline momentum
@@ -123,7 +175,8 @@
       const a = analyse(feed[t], now);
       if (a.score >= MIN_OPP_SCORE && !a.bad.length && a.best)
         opportunities.push({ ticker: t, score: a.score, dots: dots(a.score), title: a.best.title, url: a.best.url,
-          published: a.best.published, sub: timeAgo(a.best.published, now), isNew: isNew(a.best.published) });
+          published: a.best.published, sub: timeAgo(a.best.published, now), isNew: isNew(a.best.published),
+          plain: 'Positive recent news, such as an analyst upgrade. That is a reason to look closer, not a reason to buy.' });
     });
     opportunities.sort((x, y) => y.score - x.score || y.published.localeCompare(x.published));
 
@@ -139,19 +192,23 @@
             seenEx.add(k);
             const n = Math.round((d - today0) / D);
             headsUp.push({ sev: isHeld ? 2 : 1, tone: 'info', ticker: t, url: it.url, published: it.published,
-              title: `${t} goes ex-dividend ${n === 0 ? 'today' : n === 1 ? 'tomorrow' : `in ${n} days`}`, sub: it.exDividend });
+              title: `${t} goes ex-dividend ${n === 0 ? 'today' : n === 1 ? 'tomorrow' : `in ${n} days`}`, sub: it.exDividend,
+              plain: 'On this day the share price usually drops by about the dividend. That is normal and not bad news.' });
           }
         }
         const h = ageH(it.published, now);
         if (it.kind === 'notice' && it.tags.includes('results') && h <= 72)
           headsUp.push({ sev: isHeld ? 2 : 1, tone: 'info', ticker: t, url: it.url, published: it.published,
-            title: `${t}: results announced`, sub: `Read before trading · ${timeAgo(it.published, now)}` });
+            title: `${t}: results announced`, sub: `Read before trading · ${timeAgo(it.published, now)}`,
+            plain: 'The company has just reported its earnings. Prices can move sharply after results, so read it before trading.' });
         if (isHeld && it.tags.includes('analyst') && h <= 72 && it.tone > 0)
-          headsUp.push({ sev: 2, tone: 'good', ticker: t, url: it.url, published: it.published, title: it.title, sub: `${t} · analyst · ${timeAgo(it.published, now)}` });
+          headsUp.push({ sev: 2, tone: 'good', ticker: t, url: it.url, published: it.published, title: it.title, sub: `${t} · analyst · ${timeAgo(it.published, now)}`,
+            plain: 'An analyst has raised their view on a stock you own. Nice to see, but it does not change your plan.' });
       });
       if (!isHeld && a.bad.length)
         headsUp.push({ sev: 1, tone: 'bad', ticker: t, url: a.bad[0].url, published: a.bad[0].published,
-          title: `Avoid for now: ${t}`, sub: a.bad[0].title });
+          title: `Avoid for now: ${t}`, sub: a.bad[0].title,
+          plain: 'There is recent bad news on this stock. It may be wise to wait before buying.' });
     });
 
     const byNewest = (x, y) => (y.sev - x.sev) || String(y.published || '').localeCompare(String(x.published || ''));
@@ -160,14 +217,19 @@
     // Compact position chips
     const chips = (portfolio ? portfolio.rows : []).map((r) => ({
       ticker: r.ticker, gain: r.gain, stop: r.stop, price: r.price,
-      room: r.price > 0 ? (r.price - r.stop) / r.price : null,
+      room: r.price > 0 ? (r.price - r.stop) / r.price : null, target: r.target,
+      gauge: gauge(r.price, r.stop, r.target),
       state: /SELL/.test(r.action) ? 'sell' : /TRIM/.test(r.action) ? 'trim' : r.price == null ? 'noprice' : 'ok' }));
 
-    return { attention: attention.slice(0, 6), opportunities: opportunities.slice(0, 3), headsUp: headsUp.slice(0, 5), chips,
+    const priced = portfolio ? portfolio.rows.filter((r) => r.price != null).length : 0;
+    const summary = { slotsUsed: positions.length, maxPositions, invested: portfolio ? portfolio.invested : 0,
+      pl: portfolio ? portfolio.pl : 0, plPct: portfolio ? portfolio.plPct : 0,
+      allPriced: positions.length > 0 && priced === positions.length, needsYou: attention.length };
+    return { attention: attention.slice(0, 6), opportunities: opportunities.slice(0, 3), headsUp: headsUp.slice(0, 5), chips, summary,
       slotsFull: positions.length >= maxPositions, newsMissing: !brief };
   }
 
-  const api = { marketStatus, nextCheck, lastClose, priceIsFresh, rollVisit, timeAgo, analyse, buildToday, newsForCheck, weight, dots, MIN_OPP_SCORE };
+  const api = { marketStatus, nextCheck, lastClose, priceIsFresh, rollVisit, timeAgo, analyse, buildToday, newsForCheck, weight, dots, greeting, dayProgress, tipOfDay, TIPS, MIN_OPP_SCORE };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Today = api;
 })(typeof window !== 'undefined' ? window : globalThis);

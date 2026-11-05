@@ -3,93 +3,119 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#e8590c">
 <link rel="icon" href="data:,">
 <title>MoomooIQ</title>
 <link rel="stylesheet" href="/style.css">
 </head>
-<body>
-<header><h1>Moomoo<span>IQ</span></h1></header>
-<nav>
-  <button class="on" data-tab="today">☀ Today</button>
-  <button data-tab="analyse">📊 Analyse</button>
-  <button data-tab="news">📰 News</button>
-  <button data-tab="portfolio">💼 Portfolio</button>
-  <button data-tab="usage">📈 Usage</button>
+<body data-level="regular">
+<header>
+  <h1>Moomoo<span>IQ</span></h1>
+  <button class="lvl" id="lvlbadge" data-open="dlevel" aria-label="Change experience level"></button>
+</header>
+<nav aria-label="Main">
+  <button class="on" data-tab="today"><i>☀️</i><span>Today</span></button>
+  <button data-tab="analyse"><i>🔎</i><span>Research</span></button>
+  <button data-tab="portfolio"><i>💼</i><span>Portfolio</span></button>
+  <button data-tab="news"><i>📰</i><span>News</span></button>
+  <button data-tab="more"><i>⚙️</i><span>More</span></button>
 </nav>
 <main>
+
+<!-- ============ TODAY ============ -->
 <section id="today" class="on">
   <div class="hero">
-    <div><div class="date" id="tdate">&nbsp;</div><span class="pill" id="tmkt"></span></div>
-    <button class="icon" id="trefresh" aria-label="Refresh news" title="Refresh">↻</button>
+    <div class="hero-top">
+      <div>
+        <div class="greet" id="tgreet">&nbsp;</div>
+        <div class="date" id="tdate">&nbsp;</div>
+      </div>
+      <button class="icon" id="trefresh" aria-label="Refresh news and prices" title="Refresh">↻</button>
+    </div>
+    <div class="mkt"><span class="live" id="tlive"></span><span id="tmkt"></span></div>
+    <div class="daybar" aria-hidden="true"><div class="lunch" id="tlunch"></div><div class="fill" id="tfill"></div><div class="now" id="tnow"></div></div>
+    <div class="daylabels" aria-hidden="true"><span>09:00</span><span>lunch</span><span>17:00</span></div>
+    <div class="small mut" id="tnext"></div>
   </div>
-  <div class="small mut" id="tnext"></div>
+  <div id="twelcome"></div>
   <div id="tbody" aria-live="polite"></div>
-  <details class="card" id="twatch" style="margin-top:18px">
-    <summary>Edit watchlist</summary>
+  <details class="card" id="twatch">
+    <summary>✏️ Edit my watchlist</summary>
     <div class="wl" id="wlchips"></div>
     <div class="row"><select id="wladd" aria-label="Add stock to watchlist"></select><button class="go" id="wlbtn">Add</button></div>
-    <p class="small mut">Up to 8 names. Your open positions are always included.</p>
+    <p class="small mut">Up to 8 stocks. The stocks you own are always included.</p>
   </details>
 </section>
+
+<!-- ============ RESEARCH ============ -->
 <section id="analyse">
+  <div class="page-head">
+    <h2>🔎 Research a stock</h2>
+    <p class="mut">An AI-written briefing in three parts: what is driving the stock, whether it looks expensive, and a trade plan. It can be wrong, so check the key facts.</p>
+  </div>
   <div class="card row">
-    <select id="sector"></select>
-    <select id="ticker"></select>
+    <select id="sector" aria-label="Sector"></select>
+    <select id="ticker" aria-label="Stock"></select>
     <input id="aprice" type="number" step="0.001" min="0" placeholder="Today's price RM (optional)" style="width:200px">
-    <input id="atok" type="password" placeholder="Access token (saved in this browser)" autocomplete="off" size="26">
     <button class="go" id="run">Run analysis</button>
   </div>
   <div class="small mut" id="ainfo" style="margin:0 2px 10px"></div>
   <div id="out"></div>
 </section>
+
+<!-- ============ NEWS ============ -->
 <section id="news">
+  <div class="page-head">
+    <h2>📰 Search the news</h2>
+    <p class="mut">Headlines, company announcements and research from Moomoo.</p>
+  </div>
   <div class="card row">
-    <input id="kw" placeholder="Keyword, e.g. GAMUDA">
-    <select id="ntype"><option value="news">News</option><option value="notice">Notices</option><option value="research">Research</option></select>
+    <input id="kw" placeholder="Stock or topic, e.g. GAMUDA">
+    <select id="ntype" aria-label="Type"><option value="news">News</option><option value="notice">Announcements</option><option value="research">Research</option></select>
     <button class="go" id="search">Search</button>
   </div>
   <div id="nout"></div>
 </section>
+
+<!-- ============ PORTFOLIO ============ -->
 <section id="portfolio">
-  <div class="card">
-    <h3>Position tracker</h3>
-    <p class="mut">Stored only in this browser. Rules: max 3 positions · stop −8% · breakeven at +10% · lock +10% at +20% · trim 50% at +30% · trailing stop by cap size.</p>
-    <div class="row">
-      <input id="pt" placeholder="Ticker" size="9">
-      <input id="pq" type="number" placeholder="Qty" min="1" style="width:80px">
-      <input id="pc" type="number" step="0.001" placeholder="Cost RM" style="width:100px">
-      <select id="py"><option value="small">Small cap (12%)</option><option value="mid" selected>Mid cap (9%)</option><option value="large">Large cap (7%)</option></select>
-      <button class="go" id="padd">Add position</button>
+  <div class="page-head"><h2>💼 My portfolio</h2></div>
+  <div class="card summary">
+    <div class="psum" id="psum"></div>
+    <p class="small show-beg">How to read this: the <b>stop</b> is the price where your plan says to sell if the stock keeps falling, and the <b>target</b> is where you would start taking profit. Both are worked out for you.</p>
+    <div class="row prow">
+      <label class="field">Free cash RM <input id="cash" type="number" placeholder="e.g. 500" style="width:120px"></label>
+      <button class="go" id="pyahoo">↻ Update prices</button>
     </div>
-    <div class="row" style="margin-top:8px">
-      <input id="cash" type="number" placeholder="Free cash RM" style="width:130px">
-      <button class="go" id="pyahoo">Update prices (delayed)</button>
-      <button class="go" id="pfetch">Fetch prices (bridge)</button>
-      <button class="go" id="pexp" title="Download your positions as a file">Export backup</button>
-      <button class="go" id="pimp" title="Restore positions from a backup file">Import backup</button>
-      <input id="pfile" type="file" accept="application/json,.json" hidden>
-      <input id="btok" type="password" placeholder="Bridge token" autocomplete="off" size="14">
-    </div>
-    <div class="small mut" id="pnote" style="margin:6px 0"></div>
-    <div class="row" style="margin-top:4px">
-      <select id="ienv" aria-label="Which Moomoo account to read"><option value="SIMULATE">Paper account</option><option value="REAL">Real account (read-only)</option></select>
-      <button class="go" id="pimport">Import from Moomoo</button>
-    </div>
-    <div id="ipreview"></div>
-    <p class="small mut">Import and "Fetch prices (bridge)" read your Moomoo account through a small program on <b>your own computer</b>; this page never sees your Moomoo login. Check it with <code>python3 bridge/check_setup.py</code>, then run <code>BRIDGE_TOKEN=… BRIDGE_ALLOW_ORIGIN=&lt;this site's address&gt; python3 bridge/opend_bridge.py</code> (add <code>BRIDGE_ALLOW_REAL=1</code> to read your real account). Read-only: it cannot place orders. Chrome or Firefox only.</p>
+    <div class="small mut" id="pnote" style="margin-top:6px"></div>
   </div>
-  <div class="card">
-    <h3>Position sizing (8% stop)</h3>
+  <div id="pout"></div>
+
+  <details class="card tool" id="dadd">
+    <summary>➕ Add a stock I own</summary>
     <div class="row">
-      <input id="se" type="number" step="0.001" placeholder="Entry price RM" style="width:160px">
-      <input id="sr" type="number" step="0.1" min="0.1" max="10" style="width:90px" title="Max loss if the stop hits, % of equity">
-      <span class="mut" style="align-self:center">% risk of equity</span>
+      <input id="pt" placeholder="Ticker, e.g. INARI" size="12">
+      <input id="pq" type="number" placeholder="Shares" min="1" style="width:90px">
+      <input id="pc" type="number" step="0.001" placeholder="Cost RM" style="width:100px">
+      <select id="py" aria-label="Company size"><option value="small">Small company (12%)</option><option value="mid" selected>Mid-size (9%)</option><option value="large">Large company (7%)</option></select>
+      <button class="go" id="padd">Add</button>
+    </div>
+    <p class="small mut">Stored only in this browser. Company size sets how much room the trailing stop gives the stock.</p>
+  </details>
+
+  <details class="card tool" id="dsize">
+    <summary>🧮 How many shares can I buy?</summary>
+    <div class="row">
+      <input id="se" type="number" step="0.001" placeholder="Share price RM" style="width:160px">
+      <input id="sr" type="number" step="0.1" min="0.1" max="10" style="width:90px" title="Most you accept losing on one trade, as a % of your money">
+      <span class="mut" style="align-self:center">% of my money at risk</span>
     </div>
     <div id="sout" style="margin-top:8px"></div>
-  </div>
-  <div class="card">
-    <h3>Pre-trade check</h3>
-    <p class="note" style="margin:0 0 8px">Test a buy against your rules and today's news before you place it at your broker. Advice only: this page never places orders.</p>
+  </details>
+
+  <details class="card tool" id="dcheck">
+    <summary>✅ Check a buy before I make it</summary>
+    <p class="note" style="margin:0 0 8px">Tests a buy against your rules and today's news. Advice only: this page never places orders.</p>
     <div class="row">
       <input id="ct" list="ctl" placeholder="Ticker" size="9" autocomplete="off"><datalist id="ctl"></datalist>
       <input id="cq" type="number" min="1" step="1" placeholder="Shares" style="width:90px">
@@ -97,12 +123,109 @@
       <button class="go" id="cgo">Check</button>
     </div>
     <div id="cout" style="margin-top:10px"></div>
-  </div>
-  <div id="pout"></div>
+  </details>
+
+  <details class="card tool" id="dsync">
+    <summary>🔄 Sync with my Moomoo account</summary>
+    <p class="small mut">Reads your positions and cash (read-only, it cannot place orders). It needs a small program running on <b>your own computer</b>. First time? Open ⚙️ More → Connect your Moomoo account.</p>
+    <div class="row">
+      <select id="ienv" aria-label="Which Moomoo account to read"><option value="SIMULATE">Paper account</option><option value="REAL">Real account (read-only)</option></select>
+      <input id="btok" type="password" placeholder="Bridge token" autocomplete="off" size="14">
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="go" id="pimport">Import my positions</button>
+      <button class="go alt" id="pfetch">Fetch prices from Moomoo</button>
+    </div>
+    <div id="ipreview"></div>
+  </details>
 </section>
-<section id="usage">
-  <div class="card"><h3>Site usage</h3><p class="mut">Visits to this site, via Vercel Web Analytics. Aggregates only — no visitor-level data.</p></div>
-  <div id="uout"><div class="card mut">Loading…</div></div>
+
+<!-- ============ MORE ============ -->
+<section id="more">
+  <div class="page-head"><h2>⚙️ More</h2><p class="mut">Settings, help and the technical bits, kept out of the way.</p></div>
+
+  <details class="card" id="dlevel" open>
+    <summary>🎚️ My experience level</summary>
+    <div class="seg" id="lvlseg" role="group" aria-label="Experience level">
+      <button data-level="beginner">🌱 New to investing</button>
+      <button data-level="regular">📈 Some experience</button>
+      <button data-level="pro">🧠 Experienced</button>
+    </div>
+    <p class="small mut" id="lvldesc"></p>
+  </details>
+
+  <details class="card" id="dconnect">
+    <summary>🔌 Connect your Moomoo account</summary>
+    <p>Your Moomoo login never touches this website. A program called <b>OpenD</b> runs on your own computer and holds the login; a small read-only helper sits next to it and your browser talks to the helper.</p>
+    <ol class="steps">
+      <li>Install <b>Moomoo OpenD</b> from Moomoo's OpenAPI page and log in with your Moomoo account <i>in the OpenD window</i>.</li>
+      <li>Install Python, then run <code>pip install moomoo-api</code>.</li>
+      <li>Get this project's files on that computer, then run <code>python3 bridge/check_setup.py</code>. It tells you what is missing.</li>
+      <li>Start the helper with a private token and this site's address:<br><code>BRIDGE_TOKEN=your-long-random-text BRIDGE_ALLOW_ORIGIN=https://your-site python3 bridge/opend_bridge.py</code><br>Add <code>BRIDGE_ALLOW_REAL=1</code> if you want to read your real account.</li>
+      <li>Use <b>Chrome or Firefox</b> (Safari blocks this), open 💼 Portfolio → 🔄 Sync with my Moomoo account, enter the token and press Import.</li>
+    </ol>
+    <p class="small mut">Read-only: nothing here can place an order. Never type your Moomoo password, trade password or API keys into this page or any chat. The full guide is in <code>docs/connect-moomoo.md</code>.</p>
+  </details>
+
+  <details class="card" id="dbackup">
+    <summary>💾 Backup &amp; restore</summary>
+    <p class="small mut">Your stocks live only in this browser. Download a backup file so you can restore them on another phone or computer.</p>
+    <div class="row">
+      <button class="go" id="pexp" title="Download your positions as a file">Download backup</button>
+      <button class="go alt" id="pimp" title="Restore positions from a backup file">Restore from file</button>
+      <input id="pfile" type="file" accept="application/json,.json" hidden>
+    </div>
+  </details>
+
+  <details class="card" id="daccess">
+    <summary>🔑 Access code</summary>
+    <p class="small mut">Only needed if whoever runs this site asked you for a code before using Research. It is saved in this browser.</p>
+    <input id="atok" type="password" placeholder="Access code" autocomplete="off" size="26">
+  </details>
+
+  <details class="card" id="dgloss">
+    <summary>📖 Glossary: plain-English meanings</summary>
+    <dl class="gloss">
+      <dt>Stop (stop-loss)</dt><dd>A price you decide in advance to sell at if the stock keeps falling. It limits a small loss from becoming a big one.</dd>
+      <dt>Trailing stop</dt><dd>A stop that moves up as the stock rises, so you keep more of your profit. It never moves down.</dd>
+      <dt>Target</dt><dd>The price where you would start taking profit. Here it is 20% above what you paid.</dd>
+      <dt>Slot</dt><dd>One of your 3 positions. Fewer, better-watched stocks beat many you cannot follow.</dd>
+      <dt>Cash buffer</dt><dd>Spare money you do not invest (RM200 here), so you are never forced to sell at a bad time.</dd>
+      <dt>Ex-dividend</dt><dd>The cut-off day for a dividend. The share price usually drops by about the dividend that day, which is normal.</dd>
+      <dt>Daily swing</dt><dd>How much a stock normally moves in a day. A stop tighter than that is likely to trigger by accident.</dd>
+      <dt>Reality check</dt><dd>How often this stock's own past year would have hit your stop before your target. A guide, not a forecast.</dd>
+      <dt>Delayed quote</dt><dd>A price about 15 minutes old. Fine for planning, not for split-second decisions.</dd>
+      <dt>Paper account</dt><dd>A practice account with pretend money.</dd>
+    </dl>
+  </details>
+
+  <details class="card" id="dhow">
+    <summary>🧠 How the Today page decides</summary>
+    <ul class="steps">
+      <li><b>Do now</b> comes from your own rules: a stop was hit, a stock is up 30% (trim half), you are down 10% with no written plan, spare cash is under RM200, you hold more than 3 stocks, saved prices are old, or there is bad news on a stock you own.</li>
+      <li><b>Ideas worth a look</b> are stocks on your watchlist (that you do not own) with positive news in the last two weeks and no bad news in the last 7 days. Newer news counts more. It reads headlines only, so it says nothing about price or value.</li>
+      <li><b>Good to know</b> covers ex-dividend days in the next 10 days, fresh results, analyst upgrades on your stocks, and stocks to avoid for now.</li>
+      <li><b>Prices</b> come from Yahoo Finance (about 15 minutes delayed) or from your Moomoo account if you sync. A price you typed more recently is never overwritten.</li>
+      <li><b>Your rules</b>: stop 8% below what you paid, move it to break-even at +10%, lock in +10% at +20%, trim half at +30%, max 3 stocks, risk at most 2% of your money per trade.</li>
+    </ul>
+  </details>
+
+  <details class="card" id="dusage">
+    <summary>📈 Site usage (for the site owner)</summary>
+    <p class="small mut">Visits to this site via Vercel Web Analytics. Totals only, nothing about individual visitors.</p>
+    <div id="uout"><div class="mut">Loading…</div></div>
+  </details>
+
+  <details class="card" id="dabout">
+    <summary>ℹ️ About &amp; important notes</summary>
+    <ul class="steps">
+      <li><b>Educational only. Not financial advice.</b> This tool reads public information and does arithmetic. It cannot see the future, and you can lose money.</li>
+      <li>It <b>never places orders</b>. Any trade is made by you, in your own Moomoo app.</li>
+      <li>Headlines come from Moomoo. Prices come from Yahoo Finance and can be about 15 minutes late. Market hours here ignore public holidays.</li>
+      <li>The AI briefing in Research is written by a language model with no live market data, so treat anything marked "approx." as unverified.</li>
+      <li>Your stocks, cash and settings are stored only in this browser.</li>
+    </ul>
+  </details>
 </section>
 </main>
 <script src="/tracker.js"></script>
