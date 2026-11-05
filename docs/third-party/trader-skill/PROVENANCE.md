@@ -9,3 +9,8 @@
 - Scope: US markets (SEC filings, Congress PTRs, NYSE calendar, US tax rules, Alpaca/IBKR). NOT for Bursa Malaysia stocks;
   use the `moomoo-*` skills and the web app for those. Ideas adapted for Bursa live in `public/tracker.js` (pre-trade check).
 - To update: re-clone, diff against the pinned commit, re-review, then replace the folders and bump the commit here.
+
+## Superseded in part (2026-11-05)
+`day-trader-skill` (v2) was installed afterwards and replaced 7 of these folders (alerts, analyst, broker, budget, news,
+pelosi, risk). Only **trader-copycat, trader-rebalance, trader-screener, trader-tax** are still the v1 copies from this
+commit. See `../day-trader-skill/PROVENANCE.md` for the full table and how the two interact.
