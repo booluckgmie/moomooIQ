@@ -1,6 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const analyze = require('../netlify/functions/analyze');
+const P = require('../lib/prices');
+const YAHOO_FIXTURE = require('./fixtures/yahoo-5398.KL.json');
+let YAHOO = () => reply(503, {});          // by default the market-data source is down
 
 const realFetch = global.fetch;
 const reply = (status, body) => ({ ok: status < 400, status, json: async () => body, text: async () => JSON.stringify(body) });
@@ -12,10 +15,11 @@ const NEWS = { code: 0, data: [{ news_id: '1', news_type: 1, title: 'UBS Upgrade
 
 const call = (extra = {}, headers = {}) => analyze.handler({ httpMethod: 'POST', headers,
   body: JSON.stringify({ ticker: 'GAMUDA', name: 'Gamuda', framework: 'catalyst', ...extra }) });
-const setup = () => { process.env.GEMINI_API_KEY = 'k'; process.env.ANALYZE_RETRY_MS = '0'; delete process.env.GEMINI_MODEL; delete process.env.ACCESS_TOKEN; analyze._internals.resetModels(); };
+const setup = () => { YAHOO = () => reply(503, {}); P._cache.clear(); process.env.GEMINI_API_KEY = 'k'; process.env.ANALYZE_RETRY_MS = '0'; delete process.env.GEMINI_MODEL; delete process.env.ACCESS_TOKEN; analyze._internals.resetModels(); };
 // route fetch by URL; `gen(model, bodyText)` decides the Gemini reply
 const router = (gen, seen = []) => async (url, opts = {}) => {
   const u = String(url);
+  if (u.includes('finance.yahoo.com')) return YAHOO(u);
   if (u.includes('ai-news-search')) return reply(200, NEWS);
   if (u.includes('?pageSize')) return reply(200, MODELS);
   const model = /models\/([^:]+):generateContent/.exec(u)[1];
@@ -108,4 +112,28 @@ test('input and auth validation', async () => {
 test('headline lookup failure never blocks the analysis', async () => {
   setup(); global.fetch = async (url, opts) => { if (String(url).includes('ai-news-search')) throw new Error('down'); return router(() => okText())(url, opts); };
   const d = JSON.parse((await call({ ticker: 'MAXIS', name: 'Maxis' })).body); assert.strictEqual(d.headlines, 0); assert.strictEqual(d.text, 'section');
+});
+
+test('grounded in real market data: delayed price, 52-week range and daily swing reach the prompt', async () => {
+  setup(); YAHOO = () => reply(200, YAHOO_FIXTURE); const seen = []; global.fetch = router(() => okText(), seen);
+  const d = JSON.parse((await call()).body);
+  const p = seen[0].body;
+  assert.match(p, /Price: RM\d+(\.\d+)? \(delayed market quote from Yahoo Finance/);
+  assert.match(p, /52-week range RM[\d.]+-RM[\d.]+; 1-month change [+-][\d.]+%; 3-month change [+-][\d.]+%; typical daily move \(ATR14\) [\d.]+%/);
+  assert.strictEqual(d.priceSource, 'market'); assert.ok(d.price > 0);
+});
+
+test("the investor's own price wins over the market quote, and is labelled as such", async () => {
+  setup(); YAHOO = () => reply(200, YAHOO_FIXTURE); const seen = []; global.fetch = router(() => okText(), seen);
+  const d = JSON.parse((await call({ price: 2.12 })).body);
+  assert.match(seen[0].body, /Price: RM2\.12 \(entered by the investor/);
+  assert.strictEqual(d.priceSource, 'investor'); assert.strictEqual(d.price, 2.12);
+  assert.match(seen[0].body, /52-week range/);              // market context still helps even with the investor's price
+});
+
+test('market data down: the prompt says the price is unknown and forbids guessing; analysis still runs', async () => {
+  setup(); const seen = []; global.fetch = router(() => okText(), seen);   // YAHOO defaults to 503
+  const d = JSON.parse((await call()).body);
+  assert.match(seen[0].body, /UNKNOWN\. Do not guess a price/); assert.ok(!/52-week range/.test(seen[0].body));
+  assert.strictEqual(d.priceSource, null);
 });

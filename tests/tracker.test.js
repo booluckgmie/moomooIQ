@@ -60,7 +60,7 @@ test('INARI worked example: RM71 total on RM424', () => {
 const { exportState, parseImport } = require('../public/tracker');
 
 test('export then import round-trips positions and cash', () => {
-  const state = { cash: '320', positions: [{ ticker: 'INARI', qty: 200, cost: 2.12, type: 'mid', high: 2.41, price: 2.41, priceAt: '2026-10-13T09:10:00.000Z', trimmed: true, plan: 'trail' }] };
+  const state = { cash: '320', positions: [{ ticker: 'INARI', qty: 200, cost: 2.12, type: 'mid', high: 2.41, price: 2.41, priceAt: '2026-10-13T09:10:00.000Z', priceSrc: null, trimmed: true, plan: 'trail' }] };
   const back = parseImport(exportState(state));
   assert.deepStrictEqual(back.positions[0], state.positions[0]);
   assert.strictEqual(back.cash, '320');
@@ -79,7 +79,7 @@ test('import rejects junk, wrong app, bad numbers and oversize lists', () => {
 test('import drops unknown fields and coerces bad type/plan', () => {
   const r = parseImport(JSON.stringify({ app: 'moomooiq', version: 1, positions: [
     { ticker: 'gamuda', qty: 10, cost: 5, type: 'huge', evil: '<img onerror=x>', plan: 7 }] }));
-  assert.deepStrictEqual(Object.keys(r.positions[0]).sort(), ['cost', 'high', 'plan', 'price', 'priceAt', 'qty', 'ticker', 'trimmed', 'type']);
+  assert.deepStrictEqual(Object.keys(r.positions[0]).sort(), ['cost', 'high', 'plan', 'price', 'priceAt', 'priceSrc', 'qty', 'ticker', 'trimmed', 'type']);
   assert.strictEqual(r.positions[0].type, 'mid');
   assert.strictEqual(r.positions[0].ticker, 'GAMUDA');
   assert.strictEqual(r.positions[0].plan, '');

@@ -129,12 +129,14 @@ details.card summary{cursor:pointer;font-weight:600}.wl{display:flex;flex-wrap:w
     </div>
     <div class="row" style="margin-top:8px">
       <input id="cash" type="number" placeholder="Free cash RM" style="width:130px">
+      <button class="go" id="pyahoo">Update prices (delayed)</button>
       <button class="go" id="pfetch">Fetch prices (bridge)</button>
       <button class="go" id="pexp">Export</button>
       <button class="go" id="pimp">Import</button>
       <input id="pfile" type="file" accept="application/json,.json" hidden>
       <input id="btok" type="password" placeholder="Bridge token" autocomplete="off" size="14">
     </div>
+    <div class="small mut" id="pnote" style="margin:6px 0"></div>
     <p class="mut">Bridge: <code>BRIDGE_TOKEN=… python3 bridge/opend_bridge.py</code> (OpenD running, localhost, read-only). Or type prices in manually.</p>
   </div>
   <div class="card">
@@ -194,7 +196,7 @@ try{$('atok').value=localStorage.getItem('moomooiq.atok')||''}catch(e){}
 $('atok').oninput=()=>{try{$('atok').value?localStorage.setItem('moomooiq.atok',$('atok').value):localStorage.removeItem('moomooiq.atok')}catch(e){}};
 const SECTIONS={catalyst:'1 · Catalyst Breakdown',valuation:'2 · Financial Health & Valuation',scenarios:'3 · Sentiment, Scenarios & Trade Plan'};
 let job=null;
-const heldPrice=t=>{const p=state.positions.find(x=>x.ticker===t);return p&&p.price>0?p.price:null};
+const heldPrice=t=>{const p=state.positions.find(x=>x.ticker===t);return p&&p.price>0&&Today.priceIsFresh(p.priceAt,new Date())?p.price:null};
 // Each section is its own request, so a slow or busy one doesn't sink the others and can be retried alone.
 async function runSection(k,my=job){
   const el=$('sec-'+k);if(!el||my!==job)return;
@@ -205,7 +207,7 @@ async function runSection(k,my=job){
     const d=await r.json().catch(()=>({error:'Unexpected response ('+r.status+')'}));
     if(!r.ok)throw new Error(d.error||'Error '+r.status);
     if(my!==job)return;
-    el.innerHTML=`<h3>${SECTIONS[k]}</h3><div class="md">${Md.render(d.text)}</div><div class="small mut" style="margin-top:8px">${esc(d.model)}${d.headlines?` · ${d.headlines} recent headlines used`:''}</div>`;
+    el.innerHTML=`<h3>${SECTIONS[k]}</h3><div class="md">${Md.render(d.text)}</div><div class="small mut" style="margin-top:8px">${esc(d.model)}${d.headlines?` · ${d.headlines} recent headlines used`:''}${d.priceSource==='market'?` · price RM${d.price} (delayed quote)`:''}</div>`;
   }catch(e){
     if(my!==job)return;
     el.innerHTML=`<h3>${SECTIONS[k]}</h3><div class="errbox">${esc(e.message)}${/token/i.test(e.message)?' Re-enter it above; it is saved after you type it.':''}</div><button class="go sm" data-retry="${k}">Retry this section</button>`;
@@ -217,7 +219,7 @@ $('run').onclick=()=>{
   const typed=+$('aprice').value||null,price=typed||heldPrice(o.value)||null;
   job={ticker:o.value,name:o.dataset.name,price,slots:Math.min(3,state.positions.length),pending:3};
   $('ainfo').textContent=price?`Working from RM${price} (${typed?'typed':'from your tracker'}). The AI has no live prices, so it only knows this one.`
-    :"No price given, so levels come back as % moves. Enter today's price above for RM levels.";
+    :"No price typed: the server uses the latest delayed market quote (about 15 minutes behind) when it can get one.";
   $('out').innerHTML=Object.keys(SECTIONS).map(k=>`<div class="card" id="sec-${k}"></div>`).join('')
     +'<p class="note">Educational only, not financial advice. The AI uses general knowledge plus recent Moomoo headlines. Treat anything marked "approx." as unverified.</p>';
   $('run').disabled=true;Object.keys(SECTIONS).forEach(k=>runSection(k));
@@ -289,7 +291,7 @@ function renderTracker(){
     const pos=state.positions[i];
     const bad=/SELL/.test(r.action),good=/TRIM|target/.test(r.action);
     return `<tr><td><b>${esc(r.ticker)}</b><br><span class="mut">${r.qty} @ ${r.cost}</span></td>
-      <td><input data-i="${i}" data-f="price" type="number" step="0.001" value="${pos.price??''}" style="width:80px"></td>
+      <td><input data-i="${i}" data-f="price" type="number" step="0.001" value="${pos.price??''}" style="width:80px">${pos.priceSrc==='yahoo'?'<div class="small mut">delayed quote</div>':''}</td>
       <td>${pct(r.gain)}<br><span class="mut">${rm(r.pl)}</span></td>
       <td>${rm(r.stop)}<br><span class="mut">${esc(r.stopWhy)}</span></td>
       <td>${rm(r.target)}</td>
@@ -316,7 +318,7 @@ $('padd').onclick=()=>{
 $('pout').addEventListener('change',e=>{
   const i=e.target.dataset.i,f=e.target.dataset.f;if(i==null)return;
   const pos=state.positions[i];
-  if(f==='price'){pos.price=e.target.value===''?null:+e.target.value;if(pos.price){pos.high=Math.max(pos.high||0,pos.price);pos.priceAt=new Date().toISOString()}}
+  if(f==='price'){pos.price=e.target.value===''?null:+e.target.value;if(pos.price){pos.high=Math.max(pos.high||0,pos.price);pos.priceAt=new Date().toISOString();pos.priceSrc=null}}
   else if(f==='trimmed')pos.trimmed=e.target.checked;else pos[f]=e.target.value;
   save();renderTracker();
 });
@@ -426,7 +428,7 @@ function renderToday(){
   h+=t.chips.length?'<div class="chips">'+t.chips.map(c=>`<button class="chip ${c.state}" data-go="portfolio"><b>${esc(c.ticker)}</b> ${c.gain==null?'no price':pct(c.gain)} <span>stop ${rm(c.stop)}${c.room!=null?(c.room<=0?' · hit':` · ${(c.room*100).toFixed(0)}% away`):''}</span></button>`).join('')+'</div>'
     :'<p class="note">No positions yet. Add them in Portfolio and this page will watch your stops.</p>';
 
-  h+=`<p class="note" style="margin-top:20px">${briefAt?`Headlines from Moomoo, updated ${clock(new Date(briefAt))} MYT. `:''}Market hours ignore public holidays. Educational only, not financial advice.</p>`;
+  h+=`<p class="note" style="margin-top:20px">${briefAt?`Headlines from Moomoo, updated ${clock(new Date(briefAt))} MYT. `:''}${pricesAt?`Prices from Yahoo Finance (delayed), checked ${clock(new Date(pricesAt))} MYT. `:''}${/unavailable/.test(priceNote)?esc(priceNote)+' ':''}Market hours ignore public holidays. Educational only, not financial advice.</p>`;
   $('tbody').innerHTML=h;
 }
 
@@ -438,7 +440,7 @@ function renderWatch(){
 function setWatch(next){watch=next;saveJSON('moomooiq.watch',watch);renderWatch();loadBrief()}
 $('wlbtn').onclick=()=>{const v=$('wladd').value;if(v&&watch.length<8)setWatch([...watch,v])};
 $('wlchips').onclick=e=>{const t=e.target.dataset.rm;if(t)setWatch(watch.filter(x=>x!==t))};
-$('trefresh').onclick=loadBrief;
+$('trefresh').onclick=()=>{loadBrief();refreshPrices()};
 $('tbody').addEventListener('click',e=>{
   if(e.target.id==='tretry')return loadBrief();
   const go=e.target.closest('[data-go]'),an=e.target.closest('[data-an]'),ck=e.target.closest('[data-ck]');
@@ -447,12 +449,38 @@ $('tbody').addEventListener('click',e=>{
     show('analyse');$('sector').value='';fillTickers();$('ticker').value=an.dataset.an;window.scrollTo(0,0);
   }else if(go)show(go.dataset.go);
 });
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-briefAt>10*60e3)loadBrief();else if(!document.hidden)renderToday()});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-briefAt>10*60e3){loadBrief();refreshPrices()}else if(!document.hidden)renderToday()});
 setInterval(()=>{if(!document.hidden)renderToday()},60e3);
-loadBrief();
+/* ---------- Delayed prices (Yahoo via /api/quotes) ---------- */
+let pricesAt=0,priceNote='';
+// A fetched quote only replaces a stored price when it is newer than that price's timestamp (see Tracker.applyQuotes).
+async function refreshPrices(manual){
+  const tickers=[...new Set(state.positions.map(p=>p.ticker))].slice(0,12);
+  if(!tickers.length){priceNote='';$('pnote').textContent=manual?'Add a position first.':'';return}
+  if(manual){$('pyahoo').disabled=true;$('pnote').textContent='Fetching delayed prices…'}
+  try{
+    const r=await fetch('/api/quotes?tickers='+encodeURIComponent(tickers.join(',')));
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error||'quotes '+r.status);
+    const res=Tracker.applyQuotes(state.positions,d.quotes,Date.now());
+    state.positions=res.positions;save();pricesAt=Date.now();
+    priceNote=(d.failed&&d.failed.length?`No quote for ${d.failed.map(f=>f.ticker).join(', ')}. `:'')
+      +(res.changed?`Updated ${res.changed} price${res.changed===1?'':'s'} (delayed about 15 minutes).`:'Prices already up to date.');
+  }catch(e){priceNote='Live prices unavailable right now; your stored prices are unchanged.'}
+  $('pnote').textContent=priceNote;$('pyahoo').disabled=false;
+  renderTracker();
+}
+$('pyahoo').onclick=()=>refreshPrices(true);
+loadBrief();refreshPrices();
 
 /* ---------- Pre-trade check ---------- */
 function fillCheckList(){$('ctl').innerHTML=stocks.map(s=>`<option value="${esc(s.ticker)}">${esc(s.name)}</option>`).join('')}
+async function marketForCheck(t){
+  try{
+    const r=await fetch(`/api/odds?ticker=${encodeURIComponent(t)}&stop=${Tracker.RULES.initialStop}&target=${Tracker.RULES.target}&horizon=30`);
+    return r.ok?await r.json():null;
+  }catch(e){return null}
+}
 async function newsForCheck(t){
   try{
     const r=await fetch('/api/brief?tickers='+encodeURIComponent(t));
@@ -468,9 +496,10 @@ const CK_TEXT={PASS:'Within your rules. Not a buy signal.',WARN:'Allowed, but re
 $('cgo').onclick=async()=>{
   const t=$('ct').value.trim().toUpperCase();
   if(!/^[A-Z0-9.&-]{1,20}$/.test(t)){$('cout').innerHTML='<div class="errbox">Enter a ticker, e.g. INARI.</div>';return}
-  $('cgo').disabled=true;$('cout').innerHTML='<div class="mut"><span class="spin"></span> Checking your rules and today\'s news…</div>';
-  const news=await newsForCheck(t);
-  const r=Tracker.preTradeCheck({ticker:t,qty:+$('cq').value,price:+$('cp').value,positions:state.positions,cash:state.cash,riskPct:(+$('sr').value||2)/100,news});
+  $('cgo').disabled=true;$('cout').innerHTML='<div class="mut"><span class="spin"></span> Checking your rules, news and price history…</div>';
+  const [news,market]=await Promise.all([newsForCheck(t),marketForCheck(t)]);
+  if(market&&market.price>0&&!+$('cp').value)$('cp').value=market.price;
+  const r=Tracker.preTradeCheck({ticker:t,qty:+$('cq').value,price:+$('cp').value,positions:state.positions,cash:state.cash,riskPct:(+$('sr').value||2)/100,news,market});
   $('cout').innerHTML=`<div class="verdict ${r.verdict}">${r.verdict}: ${CK_TEXT[r.verdict]}</div>`
     +r.checks.map(c=>`<div class="ck ${c.level}"><span>${CK_ICON[c.level]}</span><span>${esc(c.text)}</span></div>`).join('')
     +'<p class="note">A rules check, not a recommendation. A PASS never means "buy".</p>';

@@ -108,7 +108,7 @@
       });
       const stale = positions.filter((p) => !(Number(p.price) > 0) || !priceIsFresh(p.priceAt, now)).map((p) => p.ticker);
       if (stale.length) attention.push({ sev: 2, tone: 'bad', ticker: '', go: 'portfolio',
-        title: `Update prices: ${stale.join(', ')}`, sub: 'Stops are only checked against prices you have entered, and these are out of date' });
+        title: `Update prices: ${stale.join(', ')}`, sub: 'Stops are checked against the last price on file, and these have no recent price. Update them in Portfolio.' });
     }
 
     // 2. Bad news on what you hold

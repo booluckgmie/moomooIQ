@@ -7,6 +7,7 @@ Bursa Malaysia stock analysis SPA (Gemini) plus Claude Code skills for Moomoo Op
 - `public/today.js` – pure Today logic: market hours (MYT), next-check time, price freshness, tier building, ranking
 - `lib/signals.js` – headline relevance filter + keyword tone/tags (server side); `netlify/functions/brief.js` (+ `api/brief.js`) batches Moomoo news/notices for a ticker list
 - `netlify/functions/` – `analyze.js` (Gemini; ONE section per request, the page fires 3 in parallel; retries transient errors, falls back across auto-discovered models, grounds the prompt with today's date + verified Moomoo headlines + the user's price, forbids invented prices), `lib/newsfeed.js` (shared Moomoo fetch + 5-min cache), `public/md.js` (safe markdown renderer for model output), `stocks.js` (universe), `moomoo-news.js` (public Moomoo news API)
+- `lib/prices.js` (Yahoo Finance daily bars for Bursa as `<code>.KL`, delayed ~15 min, unofficial, 2 hosts + cache) and `lib/odds.js` (history replay of the 8% stop / +20% target, ATR%, 52-week range; pure maths). Endpoints `/api/quotes` (batch delayed prices) and `/api/odds` (one stock). Idea adapted from the third-party day-trader `trader-timemachine`, rewritten for daily Bursa bars; it is a guide, not a forecast (overlapping windows, one stock, one year).
 - `public/tracker.js` – pure portfolio rules engine (stops, ladder, trim, alerts, position sizing [2% risk default, 100-share lots, 1/3 slot cap, RM200 cash buffer], export/import JSON v1 with validation); tests in `tests/`. Positions live in the browser's localStorage only.
 - Pre-trade check: `preTradeCheck` in `tracker.js` (slots, RM200 cash buffer, 1/3 cap, 2% risk at the 8% stop, 100-lot, adding-to-loser, plus bad news / results week / ex-dividend from `Today.newsForCheck`). Advisory only: it never places or sends an order. Adapted from the `trader-risk` idea.
 - `bridge/opend_bridge.py` – local read-only HTTP bridge to OpenD (token-auth, allowlisted vendor scripts, no trading endpoints)
@@ -25,6 +26,11 @@ Bursa Malaysia stock analysis SPA (Gemini) plus Claude Code skills for Moomoo Op
 - Usage tab: enable Web Analytics on the Vercel project (Analytics tab → Enable), then set `VERCEL_ANALYTICS_TOKEN` (Production + Preview) and redeploy. See `.env.example` for the optional overrides.
 - `/api/analyze` spends your Gemini quota: set `ACCESS_TOKEN` (UI field remembers it in localStorage) and/or Vercel Deployment Protection.
 - `.vercelignore` keeps skills, bridge, docs and tests out of the deploy.
+
+## Prices
+- The page refreshes held positions' prices from `/api/quotes` on load/refresh (`Tracker.applyQuotes`): a quote replaces a stored price only if it is NEWER than that price's `priceAt`, so a price typed more recently is never overwritten. Unknown tickers (not in `stocks.js`) get no quote and Today flags them stale.
+- Yahoo is unofficial and may rate-limit cloud IPs: every caller must degrade gracefully (analysis falls back to "price UNKNOWN, do not guess"; pre-trade check shows "history unavailable").
+- Pre-trade check adds: typo guard (>3% from the quote), stop vs daily swing (warn <1.5x ATR), 52-week position, and the reality check (warn only if stop-first >= 2x target-first with >= 60 starts).
 
 ## Today page rules
 - Opportunities = watchlist names (not held) with positive recency-weighted headline momentum and no bad news in 7 days. It is a news signal only: no price/valuation data. Threshold is `MIN_OPP_SCORE` in `today.js`.

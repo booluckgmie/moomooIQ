@@ -95,7 +95,8 @@
   // Pre-trade check (idea adapted from the trader-risk skill, rewritten for Bursa and this app's rules).
   // Advisory only: a PASS is "allowed to consider", never a buy signal. It cannot place or send anything.
   // news: null (unavailable) or { bad: {title, daysAgo}|null, results: {daysAgo}|null, exDiv: {days}|null }.
-  function preTradeCheck({ ticker, qty, price, positions = [], cash = 0, riskPct = 0.02, news = null, lot = 100 }, rules = RULES) {
+  // market: undefined (not asked), null (unavailable), or the /api/odds answer { price, summary: {atrPct, low52, high52}, odds }.
+  function preTradeCheck({ ticker, qty, price, positions = [], cash = 0, riskPct = 0.02, news = null, market, lot = 100 }, rules = RULES) {
     const checks = [];
     const add = (level, text) => checks.push({ level, text });
     const q = Number(qty), px = Number(price), free = Number(cash) || 0;
@@ -131,6 +132,28 @@
     if (held && Number(held.price) > 0 && Number(held.price) < Number(held.cost))
       add('warn', `You would be adding to a position that is ${pc(1 - held.price / held.cost)} below your cost. Averaging down breaks "cut losers, don't add".`);
 
+    if (market === null) add('info', 'Price history unavailable right now, so there is no typo check or reality check.');
+    else if (market) {
+      if (market.price > 0) {
+        const dev = px / market.price - 1;
+        if (Math.abs(dev) > 0.03) add('warn', `Your price ${rm(px)} is ${pc(Math.abs(dev))} ${dev > 0 ? 'above' : 'below'} the latest delayed quote (${rm(market.price)}). Check for a typo or a stale price.`);
+        else add('pass', `Your price is within 3% of the latest delayed quote (${rm(market.price)}).`);
+      }
+      const sm = market.summary;
+      if (sm && sm.atrPct > 0) {
+        const times = rules.initialStop / sm.atrPct;
+        if (times < 1.5) add('warn', `Your ${pc(rules.initialStop)} stop is only ${times.toFixed(1)}x this stock's typical daily swing (${pc(sm.atrPct)}). Ordinary noise could stop you out.`);
+        else add('pass', `Your stop is ${times.toFixed(1)}x the typical daily swing (${pc(sm.atrPct)}), so normal wobble should not hit it.`);
+      }
+      if (sm && sm.high52 > sm.low52 && market.price > 0)
+        add('info', `Trades at ${Math.round(((market.price - sm.low52) / (sm.high52 - sm.low52)) * 100)}% of its 52-week range (${rm(sm.low52)} to ${rm(sm.high52)}).`);
+      const o = market.odds;
+      if (o && o.ok) {
+        add('info', `Reality check on this stock's last ~12 months: entering on any day with a ${pc(o.stop)} stop and a +${pc(o.target)} target, over ${o.horizon} trading days, the target came first ${pc(o.targetPct)} of the time, the stop first ${pc(o.stopPct)}, neither ${pc(o.neitherPct)} (${o.starts} overlapping starts, about ${o.independent} independent periods). A guide, not a forecast.`);
+        if (o.starts >= 60 && o.stopPct >= 2 * Math.max(o.targetPct, 0.01))
+          add('warn', `History leans against this setup: the stop came first ${pc(o.stopPct)} of the time against ${pc(o.targetPct)} for the target.`);
+      } else if (o && o.ok === false) add('info', 'Not enough price history for a reality check on this stock.');
+    }
     if (news === null) add('info', 'News check unavailable right now, so check headlines yourself.');
     else {
       if (news.bad) add('warn', `Bad news ${news.bad.daysAgo}d ago: "${news.bad.title}"`);
@@ -142,6 +165,25 @@
 
     const verdict = checks.some((c) => c.level === 'block') ? 'BLOCK' : checks.some((c) => c.level === 'warn') ? 'WARN' : 'PASS';
     return { verdict, checks, cost: r3(cost), stop: r3(stop), maxLoss: r3(maxLoss), equity: r3(equity) };
+  }
+
+  // Fold fetched quotes into stored positions. A quote only replaces a stored price when it is newer than that
+  // price's timestamp, so a fresher price typed by the user is never silently overwritten. Quotes from the future
+  // or with no valid price are ignored.
+  function applyQuotes(positions, quotes, nowMs = Date.now()) {
+    let changed = 0;
+    const next = positions.map((p) => {
+      const q = quotes && quotes[p.ticker];
+      if (!q || !(Number(q.price) > 0)) return p;
+      const qt = Date.parse(q.time);
+      if (!Number.isFinite(qt) || qt > nowMs + 5 * 60e3) return p;
+      const have = Date.parse(p.priceAt);
+      if (Number.isFinite(have) && have >= qt && Number(p.price) > 0) return p;
+      changed++;
+      return { ...p, price: Number(q.price), priceAt: new Date(qt).toISOString(), priceSrc: 'yahoo',
+        high: Math.max(Number(p.high) || 0, Number(p.cost) || 0, Number(q.price)) };
+    });
+    return { positions: next, changed };
   }
 
   // Export / import. Import validates and keeps known fields only (file may come from anywhere).
@@ -168,13 +210,14 @@
       return { ticker, qty, cost, type: TYPES.includes(p.type) ? p.type : 'mid',
         high: Math.max(cost, num(p.high) || 0, price || 0), price: price > 0 ? price : null,
         priceAt: price > 0 && typeof p.priceAt === 'string' && !Number.isNaN(Date.parse(p.priceAt)) ? p.priceAt : null,
+        priceSrc: price > 0 && p.priceSrc === 'yahoo' ? 'yahoo' : null,
         trimmed: p.trimmed === true, plan: typeof p.plan === 'string' ? p.plan.slice(0, 500) : '' };
     });
     const cash = num(d.cash);
     return { positions, cash: cash == null ? '' : String(cash) };
   }
 
-  const api = { RULES, evaluate, portfolio, equityOf, sizeTrade, preTradeCheck, exportState, parseImport };
+  const api = { RULES, evaluate, portfolio, equityOf, sizeTrade, preTradeCheck, applyQuotes, exportState, parseImport };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Tracker = api;
 })(typeof window !== 'undefined' ? window : globalThis);
