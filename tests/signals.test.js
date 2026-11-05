@@ -69,3 +69,48 @@ test('tags', () => {
   assert.deepStrictEqual(S.tags('Macquarie Upgrades Inari to Outperform; Price Target Is MYR3.10'), ['analyst']);
   assert.ok(S.tags('Sime Darby Hit With RM150.2 Mil Tax Bill').includes('legal'));
 });
+
+// ---- false positives found on the live site (short or dictionary-word names matched as substrings) ----
+const UNI = Object.fromEntries(require('../netlify/functions/stocks').flat().map((s) => [s.ticker, s]));
+const rel = (title, ticker) => S.relevant(title, UNI[ticker]);
+
+test('INARI: the Japanese shrine ad is not Inari Amertron news; real INARI headlines still match', () => {
+  assert.ok(!rel('We will launch the "Toyokawa" installment of the "EMOTION!" ad series and release the "Toyokawa Inari Grand Opening Ticket."', 'INARI'));
+  assert.ok(!rel('Inari sushi recipe goes viral', 'INARI'));
+  for (const h of ['Macquarie Upgrades <em>Inari</em> Amertron to Outperform From Neutral; Price Target Is MYR3.10',
+    '<em>INARI</em> To Go Ex-Dividend On September 17th, 2026 With 0.0137 MYR Dividend Per Share',
+    'Insas Plans Sale of 5.7% Stake in <em>Inari</em> Amertron', "INARI: Changes in Sub. S-hldr's Int (Section 138 of CA 2016)",
+    'Insider Moves: Avangaad Bhd, Greatech Technology Bhd, Inari Amertron Bhd, Johor Plantations Group Bhd'])
+    assert.ok(rel(h, 'INARI'), h);
+});
+
+test('short names only count as whole UPPERCASE words: ATM is not TM, SQL is not QL, miscellaneous is not MISC', () => {
+  assert.ok(!rel('ATM Fees Rise as Banks Add Items to Tariff', 'TM'));
+  assert.ok(!rel('Oracle SQL Server Update Released', 'QL'));
+  assert.ok(!rel('Miscellaneous Items Delay Shipment', 'MISC'));
+  assert.ok(!rel('Harta karun dijumpai di Johor', 'HARTA'));            // "harta" is a Malay word
+  assert.ok(!rel('Dialog box error in new Windows update', 'DIALOG'));
+  assert.ok(rel('TM Unifi Adds 100,000 Subscribers', 'TM'));
+  assert.ok(rel('Telekom Malaysia Beats Estimates', 'TM'));
+  assert.ok(rel('QL Resources Posts Higher Profit', 'QL'));
+  assert.ok(rel('SD Guthrie, MISC, Yinson, Gamuda, Zetrix AI, LYC Healthcare', 'MISC'));
+  assert.ok(rel('Dialog Group Bhd Wins Terminal Contract', 'DIALOG'));  // the full name still works
+  assert.ok(rel('Hartalega Lifts Glove Prices', 'HARTA'));
+});
+
+test('whole words only: Gamudaland is not Gamuda, but Gamuda Land and Gamuda\'s are', () => {
+  assert.ok(!rel('Gamudaland Launches New Villas', 'GAMUDA'));
+  assert.ok(rel('Gamuda Land, Dusit International Officially Open 280-room ASAI Gamuda Cove', 'GAMUDA'));
+  assert.ok(rel("Gamuda's Order Book Hits Record", 'GAMUDA'));
+  assert.ok(rel('Brokers Digest: Local Equities - Malaysian REITs, CIMB Group Holdings Bhd, Gamuda Bhd, Mr DIY Group (M) Bhd', 'GAMUDA'));
+});
+
+test('look-alike companies are kept apart', () => {
+  assert.ok(!rel('Genting Malaysia Posts Higher Profit', 'GENTING'));
+  assert.ok(!rel('Genting Plantations Raises Dividend', 'GENTING'));
+  assert.ok(rel('Genting Cut to Sell From Buy by Maybank IB', 'GENTING'));
+  assert.ok(rel('Genting Malaysia Posts Higher Profit', 'GENM'));
+  assert.ok(!rel('IOI Properties Group Launches New Project', 'IOICORP'));
+  assert.ok(rel('IOI Corporation Output Rises', 'IOICORP'));
+  assert.ok(!rel('YTL Power International Target Price Raised', 'YTL'));
+});

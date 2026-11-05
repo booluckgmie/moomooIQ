@@ -38,6 +38,7 @@ Bursa Malaysia stock analysis SPA (Gemini) plus Claude Code skills for Moomoo Op
 - Opportunities = watchlist names (not held) with positive recency-weighted headline momentum and no bad news in 7 days. It is a news signal only: no price/valuation data. Threshold is `MIN_OPP_SCORE` in `today.js`.
 - Stops are checked against the last price on file (typed, Yahoo delayed quote, or imported from Moomoo); positions carry `priceAt`/`priceSrc` and Today flags prices older than the last close.
 - Relevance filter matters: Moomoo keyword search returns other companies' news (e.g. "Maybank" as a broker); extend `EXCLUDE`/`BROKERS`/`KEYWORD` in `lib/signals.js` when a ticker returns junk.
+- Matching rules in `lib/signals.js`: whole words only; names of 3 letters or fewer, and dictionary-like names in `AMBIGUOUS` (inari, dialog, harta, misc, sime), count only when written exactly in UPPERCASE (so "ATM" is not TM, "Toyokawa Inari" is not INARI). Add look-alike companies to `EXCLUDE` (Genting vs Genting Malaysia/Singapore, IOI Corp vs IOI Properties). Validated on 743 live headlines for 44 stocks: 7 dropped, all junk.
 - `/api/brief` request URLs contain watchlist and position tickers (no quantities or prices).
 
 ## Notes
